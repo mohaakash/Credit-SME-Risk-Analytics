@@ -435,6 +435,33 @@ app_css <- "
     margin-bottom: 12px;
   }
 
+  .filter-toolbar {
+    padding: 14px 16px 12px;
+  }
+
+  .filter-toolbar h3 {
+    margin-bottom: 2px;
+  }
+
+  .filter-toolbar .panel-caption {
+    margin-bottom: 8px;
+  }
+
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    align-items: end;
+  }
+
+  .filter-grid--single {
+    grid-template-columns: minmax(0, 360px);
+  }
+
+  .filter-grid .form-group {
+    margin-bottom: 0;
+  }
+
   .row {
     margin-left: -8px;
     margin-right: -8px;
@@ -579,6 +606,8 @@ app_css <- "
 
   @media (max-width: 900px) {
     .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .filter-grid,
+    .filter-grid--single { grid-template-columns: 1fr; }
     .risk-result { grid-template-columns: 1fr; }
     .navbar {
       position: relative;
@@ -637,24 +666,23 @@ ui <- shiny::tagList(
         "Portfolio overview",
         "Explore default patterns, risk-band mix, and segment movement in the cleaned training portfolio. All risk outputs are demonstrations based on the public dataset."
       ),
-      sidebarLayout(
-        sidebarPanel(
-          class = "panel",
-          h3("Portfolio filters"),
-          div(class = "panel-caption", "Filters apply to the borrower-level training portfolio."),
+      uiOutput("overview_cards"),
+      div(
+        class = "panel filter-toolbar",
+        h3("Portfolio filters"),
+        div(class = "panel-caption", "Filters apply to the borrower-level training portfolio."),
+        div(
+          class = "filter-grid",
           selectInput("overview_age", "Age band", choices = c("All", "<30", "30-44", "45-59", "60+", "Missing")),
           selectInput("overview_income", "Monthly income", choices = c("All", "Observed", "Missing")),
           selectInput("overview_delinquency", "90+ day history", choices = c("All", "No 90+ day events", "One or more 90+ day events", "Missing"))
-        ),
-        mainPanel(
-          uiOutput("overview_cards"),
-          fluidRow(
-            column(6, div(class = "panel", h3("Risk-band distribution"), div(class = "panel-caption", "Bands are percentile-based demonstrations from the saved logistic model."), plotOutput("overview_risk_bands", height = "320px"))),
-            column(6, div(class = "panel", h3("Default rate by age"), div(class = "panel-caption", "Observed target rate with borrower counts shown in the chart."), plotOutput("overview_age_default", height = "320px")))
-          ),
-          div(class = "panel", h3("Filtered portfolio summary"), div(class = "panel-caption", "The target is SeriousDlqin2yrs: serious delinquency within two years."), tableOutput("overview_summary_table"))
         )
-      )
+      ),
+      fluidRow(
+        column(6, div(class = "panel", h3("Risk-band distribution"), div(class = "panel-caption", "Bands are percentile-based demonstrations from the saved logistic model."), plotOutput("overview_risk_bands", height = "320px"))),
+        column(6, div(class = "panel", h3("Default rate by age"), div(class = "panel-caption", "Observed target rate with borrower counts shown in the chart."), plotOutput("overview_age_default", height = "320px")))
+      ),
+      div(class = "panel", h3("Filtered portfolio summary"), div(class = "panel-caption", "The target is SeriousDlqin2yrs: serious delinquency within two years."), tableOutput("overview_summary_table"))
     ),
     tabPanel(
       tags$span(shiny::icon("bar-chart"), "Portfolio performance"),
@@ -663,18 +691,17 @@ ui <- shiny::tagList(
         "Find the segments carrying the signal.",
         "Compare observed default rates across borrower attributes available in the Give Me Some Credit data. Application dates, loan amounts, industry, and geography are not present in this source."
       ),
-      sidebarLayout(
-        sidebarPanel(
-          class = "panel",
-          h3("Segment view"),
-          div(class = "panel-caption", "Choose a real source field or a model-derived demonstration band."),
+      div(
+        class = "panel filter-toolbar",
+        h3("Segment view"),
+        div(class = "panel-caption", "Choose a real source field or a model-derived demonstration band."),
+        div(
+          class = "filter-grid filter-grid--single",
           selectInput("portfolio_group", "Group by", choices = c("Age band" = "age_band", "Income availability" = "income_status", "90+ day history" = "delinquency_90_status", "Risk band" = "risk_band"))
-        ),
-        mainPanel(
-          div(class = "panel", h3(textOutput("portfolio_panel_title", inline = TRUE)), div(class = "panel-caption", "Observed default rate and borrower count."), plotOutput("portfolio_segment_plot", height = "380px")),
-          div(class = "panel", h3("Segment table"), tableOutput("portfolio_segment_table"))
         )
-      )
+      ),
+      div(class = "panel", h3(textOutput("portfolio_panel_title", inline = TRUE)), div(class = "panel-caption", "Observed default rate and borrower count."), plotOutput("portfolio_segment_plot", height = "380px")),
+      div(class = "panel", h3("Segment table"), tableOutput("portfolio_segment_table"))
     ),
     tabPanel(
       tags$span(shiny::icon("line-chart"), "Statistical analysis"),
