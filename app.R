@@ -648,7 +648,6 @@ ui <- shiny::tagList(
         ),
         mainPanel(
           uiOutput("overview_cards"),
-          div(class = "notice", strong("Responsible use: "), "This dashboard is an educational demonstration. It is not a lending-policy engine and should not be used to approve or decline real applications."),
           fluidRow(
             column(6, div(class = "panel", h3("Risk-band distribution"), div(class = "panel-caption", "Bands are percentile-based demonstrations from the saved logistic model."), plotOutput("overview_risk_bands", height = "320px"))),
             column(6, div(class = "panel", h3("Default rate by age"), div(class = "panel-caption", "Observed target rate with borrower counts shown in the chart."), plotOutput("overview_age_default", height = "320px")))
@@ -757,8 +756,7 @@ ui <- shiny::tagList(
         ),
         mainPanel(
           div(class = "panel", h3("Demonstration result"), uiOutput("simulator_result")),
-          div(class = "panel", h3("Model contribution view"), div(class = "panel-caption", "These are directional contributions from the saved logistic terms, not causal explanations."), tableOutput("simulator_drivers")),
-          div(class = "notice", strong("Responsible use: "), "Do not use this simulator to make or support a real credit decision. The source data is public, historical, and not a complete SME application record.")
+          div(class = "panel", h3("Model contribution view"), div(class = "panel-caption", "These are directional contributions from the saved logistic terms, not causal explanations."), tableOutput("simulator_drivers"))
         )
       )
     )
