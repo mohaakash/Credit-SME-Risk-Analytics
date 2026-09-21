@@ -1,0 +1,26 @@
+# Local data and generated artifacts
+data/raw/*
+data/processed/*
+models/*
+reports/generated/*
+screenshots/*
+
+# Keep planned output directories present in a fresh checkout
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!models/.gitkeep
+!reports/generated/.gitkeep
+!screenshots/.gitkeep
+
+# R project files and local caches
+.Rhistory
+.RData
+.Ruserdata
+renv/library/
+renv/staging/
+renv/cache/
+
+# Local SQLite databases
+*.sqlite
+*.sqlite3
+*.db
