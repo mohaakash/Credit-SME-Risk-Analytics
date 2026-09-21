@@ -151,6 +151,18 @@ model_display_labels <- c(
   XGBoost = "XGBoost"
 )
 
+stat_distribution_variables <- c(
+  "Age" = "age",
+  "Monthly income" = "monthly_income",
+  "Debt ratio" = "debt_ratio",
+  "Revolving utilization" = "revolving_utilization_of_unsecured_lines",
+  "Open credit lines" = "number_of_open_credit_lines_and_loans",
+  "30-59 days late" = "number_of_time30_59days_past_due_not_worse",
+  "60-89 days late" = "number_of_time60_89days_past_due_not_worse",
+  "90+ days late" = "number_of_times90days_late",
+  "Dependents" = "number_of_dependents"
+)
+
 format_number <- function(value, digits = 0) {
   ifelse(
     is.na(value),
@@ -510,6 +522,13 @@ ui <- shiny::tagList(
         "Separate pattern from policy.",
         "Descriptive comparisons, missingness, correlation, confidence intervals, and chi-square tests are shown as sample associations. They do not establish causality."
       ),
+      div(
+        class = "panel",
+        h3("Distribution explorer"),
+        div(class = "panel-caption", "Choose a source field to compare its observed distribution across the target classes. Values remain on the source scale and outliers are retained in the summaries."),
+        selectInput("stat_distribution_variable", "Source field", choices = stat_distribution_variables),
+        plotOutput("stat_distribution", height = "380px")
+      ),
       fluidRow(
         column(6, div(class = "panel", h3("Missingness"), div(class = "panel-caption", "Source fields with missing values after cleaning."), plotOutput("stat_missingness", height = "360px"))),
         column(6, div(class = "panel", h3("Spearman correlation"), div(class = "panel-caption", "Pairwise-complete numeric observations."), plotOutput("stat_correlation", height = "360px")))
@@ -524,6 +543,7 @@ ui <- shiny::tagList(
         "Rank risk, inspect the trade-offs.",
         "The saved logistic baseline is compared with a WoE logistic candidate, CART, a class-balanced Random Forest benchmark, and XGBoost on the same held-out test set. Metrics are demonstrations, not validated lending-policy thresholds."
       ),
+      uiOutput("model_recommendation"),
       div(class = "panel", h3("Held-out model comparison"), div(class = "panel-caption", "ROC-AUC and PR-AUC reward ranking quality; Brier score rewards probability accuracy."), tableOutput("model_metrics_table")),
       fluidRow(
         column(6, div(class = "panel", h3("ROC comparison"), plotOutput("model_roc", height = "360px"))),
@@ -734,6 +754,45 @@ server <- function(input, output, session) {
     )
   }, res = 110)
 
+  output$stat_distribution <- renderPlot({
+    variable <- input$stat_distribution_variable
+    if (is.null(variable) || !variable %in% unname(stat_distribution_variables)) {
+      variable <- unname(stat_distribution_variables[[1]])
+    }
+    label <- names(stat_distribution_variables)[match(variable, stat_distribution_variables)]
+    values <- cleaned_data[[variable]]
+    target <- cleaned_data$serious_dlqin2yrs
+    keep <- is.finite(values) & !is.na(target)
+
+    plot_theme()
+    if (!any(keep)) {
+      graphics::plot.new()
+      graphics::title(main = paste("Distribution of", label), sub = "No finite observations available")
+      return(invisible(NULL))
+    }
+
+    group <- factor(
+      ifelse(target[keep] == 1, "Defaulted", "Non-defaulted"),
+      levels = c("Non-defaulted", "Defaulted")
+    )
+    distribution_values <- values[keep]
+    counts <- table(group)
+    graphics::boxplot(
+      distribution_values ~ group,
+      col = c("#8B9D83", "#C66B3D"),
+      ylab = "Source value",
+      main = paste("Distribution of", label),
+      outline = FALSE
+    )
+    graphics::mtext(
+      paste0("Non-missing n: ", format_number(length(distribution_values)), " | ", paste(names(counts), counts, sep = " n=", collapse = "; ")),
+      side = 3,
+      line = 0.2,
+      cex = 0.75,
+      col = "#60645A"
+    )
+  }, res = 110)
+
   output$stat_correlation <- renderPlot({
     matrix <- as.matrix(correlation_data[, -1])
     rownames(matrix) <- correlation_data$variable
@@ -791,6 +850,30 @@ server <- function(input, output, session) {
         `Wilson 95% interval` = ci
       )
   }, striped = TRUE, bordered = FALSE, spacing = "s", rownames = FALSE)
+
+  output$model_recommendation <- renderUI({
+    woe_metrics <- model_metrics[model_metrics$model == "Logistic_WOE", , drop = FALSE]
+    xgb_metrics <- model_metrics[model_metrics$model == "XGBoost", , drop = FALSE]
+    if (nrow(woe_metrics) == 0 || nrow(xgb_metrics) == 0) {
+      return(div(class = "notice", strong("Held-out interpretation: "), "Model comparison artifacts are incomplete."))
+    }
+
+    div(
+      class = "notice",
+      strong("Held-out interpretation: "),
+      paste0(
+        "WoE logistic is the strongest interpretable demonstration candidate (ROC-AUC ",
+        format_number(woe_metrics$roc_auc[[1]], 3),
+        "; Brier score ",
+        format_number(woe_metrics$brier_score[[1]], 3),
+        "). XGBoost has the best ranking result (ROC-AUC ",
+        format_number(xgb_metrics$roc_auc[[1]], 3),
+        ") but weaker probability accuracy (Brier score ",
+        format_number(xgb_metrics$brier_score[[1]], 3),
+        ") after class weighting. These results are held-out demonstrations, not lending policy."
+      )
+    )
+  })
 
   output$model_metrics_table <- renderTable({
     model_metrics |>

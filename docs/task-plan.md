@@ -166,6 +166,8 @@ The application-funnel page, application dates, processing times, industry, geog
 
 - The dashboard uses only fields and saved artifacts produced by the current pipelines; it does not fabricate application dates, loan amounts, industries, geography, or processing stages.
 - The risk bands are percentile-based demonstrations from the saved logistic model and are not lending-policy thresholds.
+- The Statistical Analysis page includes a selectable source-field distribution explorer, plus missingness, correlation, group comparisons, and confidence intervals.
+- The Credit-Scoring Model page surfaces the held-out interpretation: WoE logistic is the strongest interpretable candidate, while class-weighted ensembles require calibration before any production use.
 - The visual system uses an organic earth-tone palette, rounded analytical cards, humanist typography, and a restrained grain texture to keep the dashboard approachable while retaining analytical clarity.
 - The current Shiny runtime uses base Shiny tables and plots plus `bslib`; no optional browser-side chart dependency is required.
 
