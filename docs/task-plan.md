@@ -12,6 +12,8 @@
   - `cs-test.csv`
   - `sampleEntry.csv`
 - The direct competition API requires Kaggle authentication; the public Kaggle mirror was used for this local download.
+- `renv` is initialized with a lockfile for the first data-preparation slice.
+- The first cleaning run produced a validation report and SQLite database locally; generated data artifacts remain Git-ignored.
 
 Raw files are intentionally ignored by Git. The source URL, file names, and checksums must remain documented so the data can be restored reproducibly.
 
@@ -32,9 +34,9 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ### Tasks
 
-- [ ] Create the R project entry point and initialize `renv`.
-- [ ] Add the package manifest for data work, SQL, modeling, and Shiny.
-- [ ] Confirm the repository structure:
+- [x] Initialize `renv` for the R project.
+- [x] Add the initial package manifest for data work and SQL-backed analysis.
+- [x] Confirm the repository structure:
   - `R/`
   - `data/raw/`
   - `data/processed/`
@@ -42,8 +44,8 @@ The application-funnel page, application dates, processing times, industry, geog
   - `models/`
   - `reports/`
   - `screenshots/`
-- [ ] Add a README with setup, data acquisition, run instructions, and responsible-use language.
-- [ ] Record dataset provenance and checksums.
+- [x] Add a README with setup, data acquisition, run instructions, and responsible-use language.
+- [x] Record dataset provenance and checksums.
 
 ### Acceptance criteria
 
@@ -54,15 +56,15 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ### Tasks
 
-- [ ] Read and translate `Data Dictionary.xls` into `docs/data-dictionary.md`.
-- [ ] Create `R/data_cleaning.R` with a reproducible import function.
-- [ ] Standardize column names and preserve the original Kaggle names in the data dictionary.
-- [ ] Validate row counts, column counts, data types, target values, duplicate IDs, and impossible values.
-- [ ] Profile missingness, zero values, extreme values, and suspicious sentinel values.
-- [ ] Define a documented treatment for missing monthly income and dependents.
-- [ ] Write the cleaned dataset to `data/processed/`.
-- [ ] Load the cleaned data into SQLite.
-- [ ] Add `sql/kpi_queries.sql` for row counts, default rates, segment summaries, and missingness KPIs.
+- [x] Read and translate `Data Dictionary.xls` into `docs/data-dictionary.md`.
+- [x] Create `R/data_cleaning.R` with a reproducible import function.
+- [x] Standardize column names and preserve the original Kaggle names in the data dictionary.
+- [x] Validate row counts, column counts, data types, target values, duplicate IDs, and impossible values.
+- [x] Profile missingness, zero values, extreme values, and suspicious sentinel values.
+- [x] Define a documented treatment for missing monthly income and dependents.
+- [x] Write the cleaned dataset to `data/processed/`.
+- [x] Load the cleaned data into SQLite.
+- [x] Add `sql/kpi_queries.sql` for row counts, default rates, segment summaries, and missingness KPIs.
 
 ### Acceptance criteria
 
@@ -157,11 +159,11 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ## Immediate next sprint
 
-1. Inspect the Excel data dictionary and verify the four downloaded files.
-2. Initialize the R project and `renv`.
-3. Implement the raw-data validation and cleaning pipeline.
-4. Produce the first data-quality report.
-5. Load the cleaned training data into SQLite and write the first KPI queries.
+1. [x] Inspect the Excel data dictionary and verify the four downloaded files.
+2. [x] Initialize the R project and `renv`.
+3. [x] Implement the raw-data validation and cleaning pipeline.
+4. [x] Produce the first data-quality report.
+5. [x] Load the cleaned training data into SQLite and write the first KPI queries.
 6. Review the findings before selecting final features and model scope.
 
 Stop after the first data-quality report and SQLite load. Do not build the full dashboard or synthetic funnel until the real dataset's limitations and usable fields are confirmed.

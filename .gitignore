@@ -21,6 +21,10 @@ renv/staging/
 renv/cache/
 .r-env/
 .r-debian/
+.r-cache/
+.renv-cache/
+.r-user/
+.r-user-library/
 bin/R
 bin/Rscript
 

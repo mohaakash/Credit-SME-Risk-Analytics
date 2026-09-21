@@ -4,7 +4,7 @@ An R and Shiny project for exploring credit-risk patterns, comparing default-ris
 
 ## Project status
 
-The repository is initialized and the Kaggle dataset has been downloaded locally. The data-cleaning pipeline, models, and Shiny application are planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
+The repository is initialized, `renv` is configured, and the first reproducible data-cleaning pipeline is complete. It validates the Kaggle training file, writes a cleaned CSV and SQLite database locally, and generates a data-quality report. Modeling and the Shiny application remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
 
 ## Dataset
 
@@ -67,6 +67,18 @@ kaggle datasets download -d lihxlhx/give-me-some-credit \
 ```
 
 The project will later include the R dependency setup and data-preparation commands. Until then, use [docs/task-plan.md](docs/task-plan.md) as the source of truth for the next implementation steps.
+
+### Restore the R environment and run the first pipeline
+
+The project uses `renv` to record package versions. From the repository root:
+
+```bash
+Rscript -e 'install.packages("renv", repos = "https://cloud.r-project.org")'
+Rscript -e 'renv::restore(prompt = FALSE)'
+Rscript R/data_cleaning.R
+```
+
+The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/` and `reports/generated/`. The tracked summary is [reports/data-quality-report.md](reports/data-quality-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
 
 ## Responsible use
 
