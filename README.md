@@ -4,7 +4,7 @@ An R and Shiny project for exploring credit-risk patterns, comparing default-ris
 
 ## Project status
 
-The repository is initialized, `renv` is configured, and the reproducible data-cleaning, statistical-analysis, and first modeling pipelines are available. They validate the Kaggle training file, write a cleaned CSV and SQLite database locally, and generate analysis and model-evaluation reports. A Random Forest/XGBoost comparison and the Shiny application remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
+The repository is initialized, `renv` is configured, and the reproducible data-cleaning, statistical-analysis, modeling, and Shiny dashboard slices are available. The project validates the Kaggle training file, writes a cleaned CSV and SQLite database locally, generates analysis and model-evaluation reports, and serves an interactive dashboard from `app.R`. Random Forest/XGBoost comparison and model monitoring remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
 
 ## Dataset
 
@@ -14,16 +14,21 @@ The dataset contains borrower-level credit information and the target `SeriousDl
 
 The downloaded files are stored in `data/raw/` and intentionally ignored by Git. Do not commit confidential, restricted, or personally identifiable financial data.
 
-## Planned capabilities
+## Available capabilities
 
 - Data-quality profiling and exploratory analysis
 - SQLite-backed KPI and portfolio queries
 - Interpretable logistic-regression credit-risk model
-- Random Forest or XGBoost comparison model
+- CART comparison model, with Random Forest/XGBoost documented as a follow-up
 - ROC-AUC, PR-AUC, KS, lift, calibration, and threshold analysis
 - Shiny pages for management overview, portfolio performance, statistical analysis, and model evaluation
 - Applicant risk simulator for demonstration purposes
+
+## Planned capabilities
+
 - Model-drift, calibration, and data-quality monitoring
+- Random Forest/XGBoost comparison when the package source is available
+- A defensible application-funnel dataset or explicitly labelled synthetic funnel page
 
 ## Planned repository structure
 
@@ -66,7 +71,7 @@ kaggle datasets download -d lihxlhx/give-me-some-credit \
   -p data/raw --unzip
 ```
 
-The project will later include the R dependency setup and data-preparation commands. Until then, use [docs/task-plan.md](docs/task-plan.md) as the source of truth for the next implementation steps.
+Use [docs/task-plan.md](docs/task-plan.md) as the source of truth for the implementation sequence and remaining work.
 
 ### Restore the R environment and run the first pipeline
 
@@ -81,6 +86,16 @@ Rscript R/train_models.R
 ```
 
 The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/`, `models/`, and `reports/generated/`. The tracked summaries are [reports/data-quality-report.md](reports/data-quality-report.md), [reports/statistical-analysis-report.md](reports/statistical-analysis-report.md), and [reports/modeling-report.md](reports/modeling-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
+
+### Run the dashboard
+
+After the preparation commands complete, start the Shiny app from the repository root:
+
+```bash
+Rscript -e 'shiny::runApp(".", launch.browser = TRUE)'
+```
+
+The dashboard reads the cleaned SQLite data and saved model/evaluation artifacts. It includes portfolio filters, segment performance, statistical summaries, held-out model evaluation, and an applicant risk simulator using the saved preprocessing path.
 
 ## Responsible use
 

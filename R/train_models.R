@@ -565,4 +565,6 @@ run_model_training <- function(project_root = getwd()) {
   ))
 }
 
-run_model_training()
+if (sys.nframe() == 0) {
+  run_model_training()
+}

@@ -16,6 +16,7 @@
 - The first cleaning run produced a validation report and SQLite database locally; generated data artifacts remain Git-ignored.
 - Phase 2 statistical analysis now produces descriptive comparisons, confidence intervals, segment rates, chi-square tests, correlations, plots, and a preliminary logistic interpretation report.
 - Phase 3 has a leakage-safe stratified split, logistic baseline, CART benchmark, held-out metrics, threshold trade-offs, calibration, lift, and saved local model objects. Random Forest/XGBoost remains pending because the current environment cannot retrieve the package source.
+- Phase 4 now has a runnable Shiny dashboard with management overview, portfolio performance, statistical analysis, credit-model evaluation, and an applicant risk simulator.
 
 Raw files are intentionally ignored by Git. The source URL, file names, and checksums must remain documented so the data can be restored reproducibly.
 
@@ -27,7 +28,7 @@ Build a reproducible R/Shiny portfolio-risk demonstration around the Kaggle data
 2. A SQLite-backed analytical dataset.
 3. An interpretable logistic-regression default model.
 4. One tree-based comparison model.
-5. A Shiny dashboard with management, portfolio, statistical-analysis, and model pages.
+5. A Shiny dashboard with management, portfolio, statistical-analysis, model, and demonstration simulator pages.
 6. Responsible-use documentation and evidence-based recommendations.
 
 The application-funnel page, application dates, processing times, industry, geography, and loan amount are not present in the downloaded dataset. They are out of scope until a defensible source is selected. If synthetic funnel data is added later, it must be stored separately and labelled as synthetic in the UI and documentation.
@@ -121,17 +122,17 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ### Tasks
 
-- [ ] Create `app.R` with a clear application startup check.
-- [ ] Build the Management Overview page:
+- [x] Create `app.R` with a clear application startup check.
+- [x] Build the Management Overview page:
   - Default rate
   - Borrower count
   - Risk-band distribution
   - Segment filters
-- [ ] Build the Portfolio Performance page using the available borrower attributes.
-- [ ] Build the Statistical Analysis page with missingness, distributions, and group comparisons.
-- [ ] Build the Credit-Scoring Model page with model comparison, calibration, lift, and threshold results.
-- [ ] Add the Applicant Risk Simulator after the prediction pipeline is stable.
-- [ ] Add a visible demonstration-only and responsible-use disclaimer.
+- [x] Build the Portfolio Performance page using the available borrower attributes.
+- [x] Build the Statistical Analysis page with missingness, distributions, and group comparisons.
+- [x] Build the Credit-Scoring Model page with model comparison, calibration, lift, and threshold results.
+- [x] Add the Applicant Risk Simulator using the saved preprocessing and logistic model.
+- [x] Add a visible demonstration-only and responsible-use disclaimer.
 - [ ] Add the Application Funnel page only after deciding whether to use a separate synthetic table.
 
 ### Acceptance criteria
@@ -160,6 +161,13 @@ The application-funnel page, application dates, processing times, industry, geog
 - Recommendations are traceable to analysis outputs and are not presented as actual banking policy.
 - The project can be understood and run without relying on undocumented local state.
 
+## Phase 4 implementation notes
+
+- The dashboard uses only fields and saved artifacts produced by the current pipelines; it does not fabricate application dates, loan amounts, industries, geography, or processing stages.
+- The risk bands are percentile-based demonstrations from the saved logistic model and are not lending-policy thresholds.
+- The visual system uses an organic earth-tone palette, rounded analytical cards, humanist typography, and a restrained grain texture to keep the dashboard approachable while retaining analytical clarity.
+- The current Shiny runtime uses base Shiny tables and plots plus `bslib`; no optional browser-side chart dependency is required.
+
 ## Immediate next sprint
 
 1. [x] Inspect the Excel data dictionary and verify the four downloaded files.
@@ -168,8 +176,9 @@ The application-funnel page, application dates, processing times, industry, geog
 4. [x] Produce the first data-quality report.
 5. [x] Load the cleaned training data into SQLite and write the first KPI queries.
 6. [x] Review the findings before selecting final features and model scope.
-
-Stop after the first data-quality report and SQLite load. Do not build the full dashboard or synthetic funnel until the real dataset's limitations and usable fields are confirmed.
+7. [x] Implement the first dashboard slice and verify the Shiny server outputs.
+8. [ ] Add a package-backed ensemble benchmark when a reproducible Random Forest/XGBoost source is available.
+9. [ ] Add model monitoring and decide whether a separately labelled synthetic application-funnel table is justified.
 
 ## Data provenance checksums
 

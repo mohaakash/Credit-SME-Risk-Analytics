@@ -252,4 +252,6 @@ run_data_cleaning <- function(project_root = getwd()) {
   ))
 }
 
-run_data_cleaning()
+if (sys.nframe() == 0) {
+  run_data_cleaning()
+}

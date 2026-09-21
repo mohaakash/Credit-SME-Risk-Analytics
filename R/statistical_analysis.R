@@ -712,4 +712,6 @@ run_statistical_analysis <- function(project_root = getwd()) {
   ))
 }
 
-run_statistical_analysis()
+if (sys.nframe() == 0) {
+  run_statistical_analysis()
+}
