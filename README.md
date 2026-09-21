@@ -14,6 +14,31 @@ The dataset contains borrower-level credit information and the target `SeriousDl
 
 The downloaded files are stored in `data/raw/` and intentionally ignored by Git. Do not commit confidential, restricted, or personally identifiable financial data.
 
+## Business case study
+
+### Business context
+
+A credit institution needs a repeatable way to understand borrower risk, compare candidate scoring approaches, and monitor whether a model's inputs and outputs remain stable. The goal is not to automate lending decisions immediately; it is to create an evidence-based analysis layer that helps risk, portfolio, and data teams decide what requires further validation.
+
+### Business questions
+
+This project addresses four practical questions:
+
+1. Which borrower attributes are associated with serious delinquency within two years?
+2. Which candidate model provides the best balance of ranking quality, probability accuracy, and interpretability?
+3. Which borrower segments show materially different observed default rates or model performance?
+4. What would a responsible monitoring workflow need to check before operational deployment?
+
+### Analytical solution
+
+The solution imports and validates the public Give Me Some Credit data, stores the cleaned records in SQLite, builds a leakage-safe modeling dataset, compares interpretable and tree-based models, and presents the results through a Shiny dashboard. It also includes a non-temporal monitoring demonstration because the source contains no application or scoring dates.
+
+### Business outcome
+
+The current evidence supports using the WoE logistic model as an interpretable candidate for further challenger review. XGBoost provides the strongest ranking result, but its raw probabilities require calibration and governance before operational use. Delinquency history and revolving utilization are useful candidate signals for additional verification or manual-review analysis, not automatic approval or decline rules.
+
+The main business deliverable is therefore a reproducible decision-support prototype: it makes risk patterns, model trade-offs, monitoring gaps, and responsible-use boundaries visible in one place.
+
 ## Available capabilities
 
 - Data-quality profiling and exploratory analysis
@@ -30,24 +55,73 @@ The downloaded files are stored in `data/raw/` and intentionally ignored by Git.
 
 - A defensible application-funnel dataset or explicitly labelled synthetic funnel page
 
-## Planned repository structure
+## Technical explanation
+
+### Data preparation
+
+`R/data_cleaning.R` reads the Kaggle training file, standardizes column names, validates the target and identifiers, converts known `96`/`98` delinquency sentinels to missing values, flags invalid ages and extreme values, writes a cleaned CSV, and loads the data into SQLite. The cleaning report records row counts, missingness, quality flags, and target balance.
+
+### Statistical analysis
+
+`R/statistical_analysis.R` produces missingness summaries, distributions, group comparisons, confidence intervals, chi-square tests, Spearman correlations, and an initial logistic interpretation. These results are descriptive associations and are not treated as causal evidence.
+
+### Feature engineering and modeling
+
+`R/feature_engineering.R` creates log-transformed ratios and income fields, missingness indicators, and quality flags. `R/train_models.R` uses a fixed stratified split with seed `20260921`; preprocessing is fitted on the training partition only. The candidate models are:
+
+- Raw-feature logistic regression baseline
+- Training-only Weight of Evidence logistic regression
+- CART benchmark
+- Class-balanced Random Forest benchmark
+- Fixed-parameter XGBoost benchmark
+
+Models are evaluated on the same held-out test set using ROC-AUC, PR-AUC, KS, lift, Brier score, calibration, threshold trade-offs, segment stability, leakage checks, and fairness proxy diagnostics.
+
+### Monitoring
+
+`R/model_monitoring.R` scores the fixed train/test partitions with the saved logistic baseline and writes prediction distributions, feature drift summaries, PSI bin contributions, and calibration tables. Because the source has no date field, the outputs are explicitly labelled `non_temporal_demonstration`; they are not production alerts or evidence of future stability.
+
+### Dashboard
+
+`app.R` loads the SQLite data and saved artifacts into a Shiny application with pages for portfolio overview, segment performance, statistical analysis, held-out model comparison, monitoring diagnostics, and an applicant-risk simulator. The simulator uses the same saved preprocessing path as the baseline model and is labelled demonstration-only.
+
+### Reproducibility
+
+The project uses `renv` for package management, fixed seeds for the modeling split, tracked scripts and reports, documented dataset provenance, and startup checks that fail clearly when required artifacts are missing.
+
+## Repository structure
 
 ```text
 .
-├── app.R
+├── app.R                              # Shiny dashboard
 ├── R/
+│   ├── data_cleaning.R                 # Import, validation, cleaning, SQLite load
+│   ├── feature_engineering.R           # Shared model features and WoE functions
+│   ├── statistical_analysis.R          # Descriptive and inferential analysis
+│   ├── train_models.R                  # Model training and evaluation
+│   └── model_monitoring.R              # PSI, drift, and calibration diagnostics
 ├── data/
-│   ├── raw/
-│   └── processed/
+│   ├── raw/                            # Local Kaggle files; ignored by Git
+│   └── processed/                      # Cleaned CSV and SQLite database; ignored
 ├── sql/
-├── models/
+│   └── kpi_queries.sql                 # Reusable SQLite KPI queries
+├── models/                             # Saved local model objects; ignored
 ├── reports/
-├── screenshots/
+│   ├── generated/                      # Reproducible CSV/PNG outputs; ignored
+│   ├── data-quality-report.md
+│   ├── statistical-analysis-report.md
+│   ├── modeling-report.md
+│   └── model-monitoring-report.md
+├── screenshots/                        # Dashboard presentation captures
 ├── docs/
-└── renv.lock
+│   ├── data-dictionary.md
+│   ├── credit-sme-risk-analytics-shiny.md
+│   └── task-plan.md
+├── renv.lock                           # Reproducible R package lockfile
+└── README.md
 ```
 
-## Getting started
+## How to run the project
 
 ### Prerequisites
 
@@ -62,6 +136,8 @@ git clone https://github.com/mohaakash/Credit-SME-Risk-Analytics-and-Monitoring-
 cd Credit-SME-Risk-Analytics-and-Monitoring-Dashboard
 ```
 
+All commands below must be run from the repository root.
+
 ### Restore the dataset
 
 The local raw files are not part of the Git repository. Download them from Kaggle and place the extracted files in `data/raw/`:
@@ -73,7 +149,7 @@ kaggle datasets download -d lihxlhx/give-me-some-credit \
 
 Use [docs/task-plan.md](docs/task-plan.md) as the source of truth for the implementation sequence and remaining work.
 
-### Restore the R environment and run the first pipeline
+### Restore the R environment and run the complete pipeline
 
 The project uses `renv` to record package versions. From the repository root:
 
@@ -88,6 +164,14 @@ Rscript R/model_monitoring.R
 
 The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/`, `models/`, and `reports/generated/`. The tracked summaries are [reports/data-quality-report.md](reports/data-quality-report.md), [reports/statistical-analysis-report.md](reports/statistical-analysis-report.md), [reports/modeling-report.md](reports/modeling-report.md), and [reports/model-monitoring-report.md](reports/model-monitoring-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
 
+To verify the environment after restoration:
+
+```bash
+Rscript -e 'renv::status()'
+```
+
+The expected result is `No issues found -- the project is in a consistent state.`
+
 ### Run the dashboard
 
 After the preparation commands complete, start the Shiny app from the repository root:
@@ -97,6 +181,24 @@ Rscript -e 'shiny::runApp(".", launch.browser = TRUE)'
 ```
 
 The dashboard reads the cleaned SQLite data and saved model/evaluation/monitoring artifacts. It includes portfolio filters, segment performance, statistical summaries, held-out model evaluation, a non-temporal monitoring demonstration, and an applicant risk simulator using the saved preprocessing path.
+
+If the browser does not open automatically, start the app without launching a browser:
+
+```bash
+Rscript -e 'shiny::runApp(".", launch.browser = FALSE)'
+```
+
+Then open the local URL printed by Shiny. Stop the application with `Ctrl+C`.
+
+### Re-run only the dashboard
+
+If the cleaned data, model artifacts, and monitoring outputs already exist, run only:
+
+```bash
+Rscript -e 'shiny::runApp(".", launch.browser = TRUE)'
+```
+
+If startup reports missing artifacts, rerun the complete pipeline in the order shown above.
 
 ## Dashboard captures
 
