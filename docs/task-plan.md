@@ -14,6 +14,7 @@
 - The direct competition API requires Kaggle authentication; the public Kaggle mirror was used for this local download.
 - `renv` is initialized with a lockfile for the first data-preparation slice.
 - The first cleaning run produced a validation report and SQLite database locally; generated data artifacts remain Git-ignored.
+- Phase 2 statistical analysis now produces descriptive comparisons, confidence intervals, segment rates, chi-square tests, correlations, plots, and a preliminary logistic interpretation report.
 
 Raw files are intentionally ignored by Git. The source URL, file names, and checksums must remain documented so the data can be restored reproducibly.
 
@@ -77,14 +78,14 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ### Tasks
 
-- [ ] Create `R/statistical_analysis.R`.
-- [ ] Compare defaulted and non-defaulted borrowers across all usable variables.
-- [ ] Produce distributions, outlier summaries, and missing-value visuals.
-- [ ] Add correlation analysis for numeric variables.
-- [ ] Add confidence intervals for default rates and group comparisons.
-- [ ] Add chi-square tests for binned/categorical variables where appropriate.
-- [ ] Add an initial logistic-regression interpretation report.
-- [ ] Save reproducible figures and summary tables under `reports/generated/`.
+- [x] Create `R/statistical_analysis.R`.
+- [x] Compare defaulted and non-defaulted borrowers across all usable variables.
+- [x] Produce distributions, outlier summaries, and missing-value visuals.
+- [x] Add correlation analysis for numeric variables.
+- [x] Add confidence intervals for default rates and group comparisons.
+- [x] Add chi-square tests for binned/categorical variables where appropriate.
+- [x] Add an initial logistic-regression interpretation report.
+- [x] Save reproducible figures and summary tables under `reports/generated/`.
 
 ### Acceptance criteria
 
@@ -164,7 +165,7 @@ The application-funnel page, application dates, processing times, industry, geog
 3. [x] Implement the raw-data validation and cleaning pipeline.
 4. [x] Produce the first data-quality report.
 5. [x] Load the cleaned training data into SQLite and write the first KPI queries.
-6. Review the findings before selecting final features and model scope.
+6. [x] Review the findings before selecting final features and model scope.
 
 Stop after the first data-quality report and SQLite load. Do not build the full dashboard or synthetic funnel until the real dataset's limitations and usable fields are confirmed.
 

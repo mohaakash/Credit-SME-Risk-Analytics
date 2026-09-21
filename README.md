@@ -4,7 +4,7 @@ An R and Shiny project for exploring credit-risk patterns, comparing default-ris
 
 ## Project status
 
-The repository is initialized, `renv` is configured, and the first reproducible data-cleaning pipeline is complete. It validates the Kaggle training file, writes a cleaned CSV and SQLite database locally, and generates a data-quality report. Modeling and the Shiny application remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
+The repository is initialized, `renv` is configured, and the reproducible data-cleaning and statistical-analysis pipelines are complete. They validate the Kaggle training file, write a cleaned CSV and SQLite database locally, and generate data-quality and statistical-analysis reports. Modeling and the Shiny application remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
 
 ## Dataset
 
@@ -76,9 +76,10 @@ The project uses `renv` to record package versions. From the repository root:
 Rscript -e 'install.packages("renv", repos = "https://cloud.r-project.org")'
 Rscript -e 'renv::restore(prompt = FALSE)'
 Rscript R/data_cleaning.R
+Rscript R/statistical_analysis.R
 ```
 
-The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/` and `reports/generated/`. The tracked summary is [reports/data-quality-report.md](reports/data-quality-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
+The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/` and `reports/generated/`. The tracked summaries are [reports/data-quality-report.md](reports/data-quality-report.md) and [reports/statistical-analysis-report.md](reports/statistical-analysis-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
 
 ## Responsible use
 
