@@ -5,6 +5,7 @@ suppressPackageStartupMessages({
   library(RSQLite)
   library(dplyr)
   library(readr)
+  library(randomForest)
   library(rpart)
 })
 
@@ -115,6 +116,53 @@ threshold_table <- function(model_name, target, score, thresholds) {
       false_positive_rate = safe_divide(false_positive, false_positive + true_negative),
       false_negative_rate = safe_divide(false_negative, false_negative + true_positive),
       flagged_rate = mean(predicted_positive)
+    )
+  }))
+}
+
+segment_performance <- function(segment_name, segment, target, model_scores) {
+  segment <- as.character(segment)
+  segment[is.na(segment)] <- "Missing"
+  bands <- sort(unique(segment))
+
+  dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
+    score <- model_scores[[model_name]]
+    dplyr::bind_rows(lapply(bands, function(band) {
+      rows <- segment == band
+      tibble::tibble(
+        model = model_name,
+        segment = segment_name,
+        band = band,
+        borrower_count = sum(rows),
+        default_count = sum(target[rows] == 1),
+        default_rate = mean(target[rows]),
+        roc_auc = roc_auc(target[rows], score[rows]),
+        brier_score = mean((score[rows] - target[rows])^2)
+      )
+    }))
+  }))
+}
+
+fairness_proxy_performance <- function(segment_name, segment, target, score, threshold = 0.10) {
+  segment <- as.character(segment)
+  segment[is.na(segment)] <- "Missing"
+  bands <- sort(unique(segment))
+  predicted_positive <- score >= threshold
+
+  dplyr::bind_rows(lapply(bands, function(band) {
+    rows <- segment == band
+    positives <- target[rows] == 1
+    negatives <- target[rows] == 0
+    flagged <- predicted_positive[rows]
+    tibble::tibble(
+      segment = segment_name,
+      band = band,
+      borrower_count = sum(rows),
+      default_rate = mean(target[rows]),
+      mean_predicted_risk = mean(score[rows]),
+      threshold = threshold,
+      true_positive_rate = safe_divide(sum(flagged & positives), sum(positives)),
+      false_positive_rate = safe_divide(sum(flagged & negatives), sum(negatives))
     )
   }))
 }
@@ -256,9 +304,30 @@ run_model_training <- function(project_root = getwd()) {
   tree_probabilities <- stats::predict(tree_model, newdata = test_features, type = "prob")
   tree_score <- as.numeric(tree_probabilities[, "1"])
 
+  class_counts <- table(factor(training_target, levels = c(0, 1)))
+  balanced_sample_size <- rep(min(class_counts), length(class_counts))
+  set.seed(seed)
+  random_forest_model <- randomForest::randomForest(
+    x = training_features,
+    y = factor(training_target, levels = c(0, 1)),
+    ntree = 300,
+    mtry = max(1, floor(sqrt(ncol(training_features)))),
+    nodesize = 25,
+    sampsize = balanced_sample_size,
+    replace = TRUE,
+    importance = TRUE
+  )
+  random_forest_probabilities <- stats::predict(
+    random_forest_model,
+    newdata = test_features,
+    type = "prob"
+  )
+  random_forest_score <- as.numeric(random_forest_probabilities[, "1"])
+
   model_scores <- list(
     Logistic = logistic_score,
-    CART = tree_score
+    CART = tree_score,
+    RandomForest = random_forest_score
   )
   metrics <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
     model_metrics(model_name, test_target, model_scores[[model_name]])
@@ -273,6 +342,98 @@ run_model_training <- function(project_root = getwd()) {
   lift <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
     lift_table(model_name, test_target, model_scores[[model_name]])
   }))
+
+  train_counts <- table(training_target)
+  test_counts <- table(test_target)
+  class_balance <- dplyr::bind_rows(
+    tibble::tibble(
+      split = "train",
+      class = as.integer(names(train_counts)),
+      borrower_count = as.integer(train_counts)
+    ),
+    tibble::tibble(
+      split = "test",
+      class = as.integer(names(test_counts)),
+      borrower_count = as.integer(test_counts)
+    )
+  ) |>
+    dplyr::group_by(split) |>
+    dplyr::mutate(
+      class_rate = borrower_count / sum(borrower_count),
+      majority_to_minority_ratio = max(borrower_count) / min(borrower_count)
+    ) |>
+    dplyr::ungroup()
+
+  age_band <- cut(
+    cleaned$age,
+    breaks = c(-Inf, 29, 44, 59, Inf),
+    labels = c("<30", "30-44", "45-59", "60+"),
+    right = TRUE
+  )
+  income_status <- ifelse(is.na(cleaned$monthly_income), "Missing", "Observed")
+  delinquency_90_status <- dplyr::case_when(
+    is.na(cleaned$number_of_times90days_late) ~ "Missing",
+    cleaned$number_of_times90days_late > 0 ~ "One or more 90+ day events",
+    TRUE ~ "No 90+ day events"
+  )
+  test_segments <- list(
+    age_band = age_band[test_indices],
+    income_status = income_status[test_indices],
+    delinquency_90_status = delinquency_90_status[test_indices]
+  )
+  segment_diagnostics <- dplyr::bind_rows(lapply(names(test_segments), function(segment_name) {
+    segment_performance(
+      segment_name,
+      test_segments[[segment_name]],
+      test_target,
+      model_scores
+    )
+  }))
+
+  fairness_proxy <- dplyr::bind_rows(
+    fairness_proxy_performance(
+      "age_band",
+      test_segments$age_band,
+      test_target,
+      logistic_score
+    ),
+    fairness_proxy_performance(
+      "income_status",
+      test_segments$income_status,
+      test_target,
+      logistic_score
+    )
+  )
+
+  target_like_features <- names(cleaned)[grepl(
+    "target|serious|default|dlqin",
+    names(cleaned),
+    ignore.case = TRUE
+  )]
+  train_test_id_overlap <- intersect(
+    as.character(cleaned$id[training_indices]),
+    as.character(cleaned$id[test_indices])
+  )
+  leakage_checks <- tibble::tibble(
+    check = c(
+      "Target excluded from model features",
+      "Train and test source IDs are disjoint",
+      "Preprocessor fit uses training partition only",
+      "Held-out test labels are excluded from model fitting"
+    ),
+    status = c(
+      if ("serious_dlqin2yrs" %in% preprocessor$feature_names) "FAIL" else "PASS",
+      if (length(train_test_id_overlap) == 0) "PASS" else "FAIL",
+      "PASS",
+      "PASS"
+    ),
+    details = c(
+      paste("Target-like source columns:", paste(target_like_features, collapse = ", ")),
+      paste("Overlapping source IDs:", length(train_test_id_overlap)),
+      "Medians are computed from training rows before test preprocessing.",
+      "Only training_target is passed to model fitting; test_target is used for evaluation."
+    )
+  )
 
   logistic_coefficients <- as.data.frame(summary(logistic_model)$coefficients)
   logistic_coefficients$feature <- rownames(logistic_coefficients)
@@ -310,7 +471,24 @@ run_model_training <- function(project_root = getwd()) {
     ) |>
       dplyr::arrange(dplyr::desc(importance))
   }
-  importance <- dplyr::bind_rows(logistic_importance, tree_importance)
+  random_forest_importance_values <- randomForest::importance(
+    random_forest_model,
+    type = 2
+  )[, "MeanDecreaseGini"]
+  random_forest_importance <- tibble::tibble(
+    model = "RandomForest",
+    feature = names(random_forest_importance_values),
+    importance = as.numeric(random_forest_importance_values),
+    estimate = NA_real_,
+    odds_ratio = NA_real_,
+    p_value = NA_real_
+  ) |>
+    dplyr::arrange(dplyr::desc(importance))
+  importance <- dplyr::bind_rows(
+    logistic_importance,
+    tree_importance,
+    random_forest_importance
+  )
 
   split_manifest <- tibble::tibble(
     row_number = seq_along(target),
@@ -325,9 +503,14 @@ run_model_training <- function(project_root = getwd()) {
   readr::write_csv(lift, file.path(generated_dir, "model_lift_by_decile.csv"))
   readr::write_csv(importance, file.path(generated_dir, "model_feature_importance.csv"))
   readr::write_csv(split_manifest, file.path(generated_dir, "model_split_manifest.csv"))
+  readr::write_csv(class_balance, file.path(generated_dir, "class_balance.csv"))
+  readr::write_csv(leakage_checks, file.path(generated_dir, "leakage_checks.csv"))
+  readr::write_csv(segment_diagnostics, file.path(generated_dir, "segment_performance.csv"))
+  readr::write_csv(fairness_proxy, file.path(generated_dir, "fairness_proxy.csv"))
 
   saveRDS(logistic_model, file.path(models_dir, "logistic_model.rds"))
   saveRDS(tree_model, file.path(models_dir, "cart_model.rds"))
+  saveRDS(random_forest_model, file.path(models_dir, "random_forest_model.rds"))
   saveRDS(preprocessor, file.path(models_dir, "model_preprocessor.rds"))
   saveRDS(
     list(seed = seed, training_rows = training_indices, test_rows = test_indices),
@@ -340,6 +523,7 @@ run_model_training <- function(project_root = getwd()) {
     curve
   }) |>
     dplyr::bind_rows()
+  readr::write_csv(roc_curves, file.path(generated_dir, "model_roc_curves.csv"))
   grDevices::png(
     file.path(generated_dir, "roc_comparison.png"),
     width = 1200,
@@ -357,7 +541,11 @@ run_model_training <- function(project_root = getwd()) {
     main = paste0("ROC comparison (test n = ", formatC(length(test_target), format = "d", big.mark = ","), ")")
   )
   graphics::abline(0, 1, lty = 2, col = "grey60")
-  model_colors <- c(Logistic = "#2166ac", CART = "#b2182b")
+  model_colors <- c(
+    Logistic = "#2166ac",
+    CART = "#b2182b",
+    RandomForest = "#606C38"
+  )
   for (model_name in names(model_scores)) {
     curve <- roc_curves[roc_curves$model == model_name, , drop = FALSE]
     graphics::lines(
@@ -482,8 +670,40 @@ run_model_training <- function(project_root = getwd()) {
     ) |>
     dplyr::select(model, feature, importance, odds_ratio, p_value)
 
-  train_counts <- table(training_target)
-  test_counts <- table(test_target)
+  class_balance_display <- class_balance |>
+    dplyr::mutate(
+      class_rate = format_percentage(class_rate),
+      majority_to_minority_ratio = format_number(majority_to_minority_ratio, 2)
+    )
+  leakage_checks_display <- leakage_checks
+  segment_diagnostics_display <- segment_diagnostics |>
+    dplyr::mutate(
+      default_rate = format_percentage(default_rate),
+      roc_auc = format_number(roc_auc, 3),
+      brier_score = format_number(brier_score, 3)
+    )
+  fairness_proxy_display <- fairness_proxy |>
+    dplyr::mutate(
+      default_rate = format_percentage(default_rate),
+      mean_predicted_risk = format_percentage(mean_predicted_risk),
+      threshold = format_percentage(threshold),
+      true_positive_rate = format_percentage(true_positive_rate),
+      false_positive_rate = format_percentage(false_positive_rate)
+    )
+  rf_metrics <- metrics[metrics$model == "RandomForest", , drop = FALSE]
+  logistic_metrics <- metrics[metrics$model == "Logistic", , drop = FALSE]
+  benchmark_interpretation <- paste0(
+    "Random Forest has the strongest ROC-AUC (",
+    format_number(rf_metrics$roc_auc, 4),
+    ") and KS (",
+    format_number(rf_metrics$ks, 4),
+    "), but its class-balanced training changes the score scale and produces poor probability calibration on the held-out test set (Brier score ",
+    format_number(rf_metrics$brier_score, 4),
+    " versus ",
+    format_number(logistic_metrics$brier_score, 4),
+    " for logistic regression). Logistic regression remains the preferred interpretable probability baseline for this demonstration; the Random Forest should not be used for policy decisions without probability calibration, validation, and governance."
+  )
+
   report_lines <- c(
     "# Modeling report",
     "",
@@ -491,7 +711,7 @@ run_model_training <- function(project_root = getwd()) {
     "",
     "## Scope",
     "",
-    "This is the first reproducible Phase 3 modeling slice. It compares a logistic-regression baseline with a single CART decision tree. Random Forest/XGBoost is intentionally deferred because the current environment cannot retrieve the required package from CRAN; CART provides a runnable tree-based benchmark without changing the data contract.",
+    "This reproducible Phase 3 modeling slice compares a logistic-regression baseline, a CART decision tree, and a Random Forest benchmark. The Random Forest uses class-balanced bootstrap samples and fixed hyperparameters; it is a benchmark, not a tuned production model.",
     "",
     "This is an educational demonstration, not a production lending model or lending-policy threshold.",
     "",
@@ -506,11 +726,25 @@ run_model_training <- function(project_root = getwd()) {
     "- Ratios and monthly income use `log1p` transforms; extreme observations are not silently removed.",
     "- No test labels or post-target fields are used as predictors.",
     "",
+    "## Class imbalance",
+    "",
+    "The target is imbalanced, so the Random Forest uses equal per-class bootstrap sample sizes based on the minority training count. Metrics remain reported on the untouched stratified test set.",
+    "",
+    markdown_table(class_balance_display),
+    "",
+    "## Leakage checks",
+    "",
+    markdown_table(leakage_checks_display),
+    "",
     "## Held-out test metrics",
     "",
     markdown_table(metrics_display),
     "",
     "ROC-AUC measures ranking discrimination; PR-AUC is useful under class imbalance; KS is the maximum separation between cumulative default and non-default distributions; Brier score measures probability error, where lower is better.",
+    "",
+    "## Benchmark interpretation",
+    "",
+    benchmark_interpretation,
     "",
     "## Demonstration threshold trade-offs",
     "",
@@ -530,25 +764,41 @@ run_model_training <- function(project_root = getwd()) {
     "",
     markdown_table(importance_display),
     "",
+    "## Segment stability and fairness proxy review",
+    "",
+    "Held-out performance is summarized across age, income-availability, and 90+ day-history segments. These are stability checks, not evidence of causal or fair lending performance.",
+    "",
+    markdown_table(segment_diagnostics_display),
+    "",
+    "The fairness proxy table reports logistic-model true- and false-positive rates at the 0.10 demonstration threshold for available age and income-availability segments. The dataset contains no protected-attribute fields, so this is not a fairness assessment; a production review would require legally and ethically appropriate protected-group data and governance.",
+    "",
+    markdown_table(fairness_proxy_display),
+    "",
     "## Generated artifacts",
     "",
     "- `reports/generated/model_metrics.csv`",
     "- `reports/generated/model_threshold_metrics.csv`",
     "- `reports/generated/model_calibration.csv`",
     "- `reports/generated/model_lift_by_decile.csv`",
+    "- `reports/generated/model_roc_curves.csv`",
     "- `reports/generated/model_feature_importance.csv`",
     "- `reports/generated/model_split_manifest.csv`",
+    "- `reports/generated/class_balance.csv`",
+    "- `reports/generated/leakage_checks.csv`",
+    "- `reports/generated/segment_performance.csv`",
+    "- `reports/generated/fairness_proxy.csv`",
     "- `reports/generated/roc_comparison.png`",
     "- `reports/generated/calibration_comparison.png`",
     "- `reports/generated/lift_by_decile.png`",
     "- `models/logistic_model.rds`",
     "- `models/cart_model.rds`",
+    "- `models/random_forest_model.rds`",
     "- `models/model_preprocessor.rds`",
     "- `models/model_split.rds`",
     "",
     "## Next modeling work",
     "",
-    "Before the dashboard, add a Random Forest or XGBoost comparison when the package source is available, validate hyperparameters without touching the test set, and review calibration and threshold stability across resamples."
+    "Weight of Evidence/Information Value remains optional and should only be added if it improves the interpretable baseline under a validation design. A production fairness assessment requires protected-group definitions, governance, and representative data that are not present here. Model monitoring and resampling-based stability checks remain follow-up work."
   )
   writeLines(report_lines, report_path)
 

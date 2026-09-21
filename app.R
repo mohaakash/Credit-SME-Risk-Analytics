@@ -21,7 +21,12 @@ required_artifacts <- c(
   file.path(project_root, "reports", "generated", "model_metrics.csv"),
   file.path(project_root, "reports", "generated", "model_calibration.csv"),
   file.path(project_root, "reports", "generated", "model_lift_by_decile.csv"),
-  file.path(project_root, "reports", "generated", "model_threshold_metrics.csv")
+  file.path(project_root, "reports", "generated", "model_threshold_metrics.csv"),
+  file.path(project_root, "reports", "generated", "model_roc_curves.csv"),
+  file.path(project_root, "reports", "generated", "numeric_group_comparisons.csv"),
+  file.path(project_root, "reports", "generated", "missingness.csv"),
+  file.path(project_root, "reports", "generated", "segment_default_rates.csv"),
+  file.path(project_root, "reports", "generated", "correlation_matrix_spearman.csv")
 )
 missing_artifacts <- required_artifacts[!file.exists(required_artifacts)]
 if (length(missing_artifacts) > 0) {
@@ -50,6 +55,10 @@ model_lift <- readr::read_csv(
 )
 model_thresholds <- readr::read_csv(
   file.path(project_root, "reports", "generated", "model_threshold_metrics.csv"),
+  show_col_types = FALSE
+)
+model_roc_curves <- readr::read_csv(
+  file.path(project_root, "reports", "generated", "model_roc_curves.csv"),
   show_col_types = FALSE
 )
 numeric_comparisons <- readr::read_csv(
@@ -107,10 +116,10 @@ cleaned_data$income_status <- ifelse(
   "Missing",
   "Observed"
 )
-cleaned_data$delinquency_90_status <- ifelse(
-  cleaned_data$number_of_times90days_late > 0,
-  "One or more 90+ day events",
-  "No 90+ day events"
+cleaned_data$delinquency_90_status <- dplyr::case_when(
+  is.na(cleaned_data$number_of_times90days_late) ~ "Missing",
+  cleaned_data$number_of_times90days_late > 0 ~ "One or more 90+ day events",
+  TRUE ~ "No 90+ day events"
 )
 
 pretty_feature_labels <- c(
@@ -453,7 +462,7 @@ ui <- shiny::tagList(
           div(class = "panel-caption", "Filters apply to the borrower-level training portfolio."),
           selectInput("overview_age", "Age band", choices = c("All", "<30", "30-44", "45-59", "60+", "Missing")),
           selectInput("overview_income", "Monthly income", choices = c("All", "Observed", "Missing")),
-          selectInput("overview_delinquency", "90+ day history", choices = c("All", "No 90+ day events", "One or more 90+ day events"))
+          selectInput("overview_delinquency", "90+ day history", choices = c("All", "No 90+ day events", "One or more 90+ day events", "Missing"))
         ),
         mainPanel(
           uiOutput("overview_cards"),
@@ -505,7 +514,7 @@ ui <- shiny::tagList(
       page_intro(
         "Credit-scoring model",
         "Rank risk, inspect the trade-offs.",
-        "The saved logistic baseline is compared with a CART benchmark on the same held-out test set. Metrics are demonstrations, not validated lending-policy thresholds."
+        "The saved logistic baseline is compared with CART and a class-balanced Random Forest benchmark on the same held-out test set. Metrics are demonstrations, not validated lending-policy thresholds."
       ),
       div(class = "panel", h3("Held-out model comparison"), div(class = "panel-caption", "ROC-AUC and PR-AUC reward ranking quality; Brier score rewards probability accuracy."), tableOutput("model_metrics_table")),
       fluidRow(
@@ -514,7 +523,7 @@ ui <- shiny::tagList(
       ),
       div(class = "panel", h3("Lift by risk decile"), div(class = "panel-caption", "Decile 1 contains the highest predicted-risk borrowers."), plotOutput("model_lift_plot", height = "360px")),
       div(class = "panel", h3("Demonstration threshold trade-offs"), div(class = "panel-caption", "No threshold is selected as real lending policy."), tableOutput("model_threshold_table")),
-      div(class = "notice", strong("Model boundary: "), "The current comparison is logistic regression versus CART. Random Forest/XGBoost remains a documented follow-up when its package source is available in the environment.")
+      div(class = "notice", strong("Model boundary: "), "The current comparison is logistic regression, CART, and Random Forest. The Random Forest is a fixed benchmark with poor probability calibration after class-balanced sampling; it is not a production model.")
     ),
     tabPanel(
       "Risk simulator",
@@ -797,31 +806,47 @@ server <- function(input, output, session) {
   }, striped = TRUE, bordered = FALSE, spacing = "s", rownames = FALSE)
 
   output$model_roc <- renderPlot({
-    split_manifest <- readr::read_csv(file.path(project_root, "reports", "generated", "model_split_manifest.csv"), show_col_types = FALSE)
-    test_rows <- split_manifest$split == "test"
-    test_features <- model_features[test_rows, , drop = FALSE]
-    test_target <- split_manifest$target[test_rows]
-    logistic_scores <- as.numeric(stats::predict(logistic_model, newdata = test_features, type = "response"))
-    roc_curve <- function(target, score) {
-      ordering <- order(score, decreasing = TRUE)
-      ordered_target <- target[ordering]
-      data.frame(
-        fpr = c(0, cumsum(1 - ordered_target) / sum(target == 0)),
-        tpr = c(0, cumsum(ordered_target) / sum(target == 1))
+    plot_theme()
+    colors <- c(Logistic = "#2166ac", CART = "#C66B3D", RandomForest = "#606C38")
+    graphics::plot(
+      0,
+      0,
+      type = "n",
+      xlim = c(0, 1),
+      ylim = c(0, 1),
+      xlab = "False-positive rate",
+      ylab = "True-positive rate",
+      main = "Held-out ROC comparison"
+    )
+    for (model_name in unique(model_roc_curves$model)) {
+      values <- model_roc_curves[model_roc_curves$model == model_name, , drop = FALSE]
+      graphics::lines(
+        values$false_positive_rate,
+        values$true_positive_rate,
+        col = colors[[model_name]],
+        lwd = 2
       )
     }
-    curve <- roc_curve(test_target, logistic_scores)
-    plot_theme()
-    graphics::plot(curve$fpr, curve$tpr, type = "l", col = "#2166ac", lwd = 3, xlim = c(0, 1), ylim = c(0, 1), xlab = "False-positive rate", ylab = "True-positive rate", main = "Saved logistic model on the test set")
     graphics::abline(0, 1, lty = 2, col = "#8B9D83")
-    graphics::legend("bottomright", legend = paste0("ROC-AUC = ", format_number(model_metrics$roc_auc[model_metrics$model == "Logistic"], 3)), col = "#2166ac", lwd = 3, bty = "n")
+    legend_labels <- paste0(
+      model_metrics$model,
+      " ROC-AUC = ",
+      format_number(model_metrics$roc_auc, 3)
+    )
+    graphics::legend(
+      "bottomright",
+      legend = legend_labels,
+      col = colors[model_metrics$model],
+      lwd = 2,
+      bty = "n"
+    )
   }, res = 110)
 
   output$model_calibration_plot <- renderPlot({
     plot_theme()
     graphics::plot(0, 0, type = "n", xlim = c(0, max(model_calibration$predicted_default_rate) * 1.05), ylim = c(0, max(model_calibration$observed_default_rate) * 1.05), xlab = "Mean predicted default rate", ylab = "Observed default rate", main = "Calibration by risk decile")
     graphics::abline(0, 1, lty = 2, col = "#8B9D83")
-    colors <- c(Logistic = "#2166ac", CART = "#C66B3D")
+    colors <- c(Logistic = "#2166ac", CART = "#C66B3D", RandomForest = "#606C38")
     for (model_name in unique(model_calibration$model)) {
       values <- model_calibration[model_calibration$model == model_name, , drop = FALSE]
       graphics::lines(values$predicted_default_rate, values$observed_default_rate, type = "b", col = colors[[model_name]], lwd = 2, pch = 19)
@@ -831,7 +856,7 @@ server <- function(input, output, session) {
 
   output$model_lift_plot <- renderPlot({
     plot_theme()
-    colors <- c(Logistic = "#2166ac", CART = "#C66B3D")
+    colors <- c(Logistic = "#2166ac", CART = "#C66B3D", RandomForest = "#606C38")
     graphics::plot(1:10, rep(NA_real_, 10), type = "n", xlim = c(1, 10), ylim = c(0, max(model_lift$lift) * 1.05), xlab = "Risk decile (1 = highest predicted risk)", ylab = "Observed lift", main = "Lift by risk decile")
     graphics::abline(h = 1, lty = 2, col = "#8B9D83")
     for (model_name in unique(model_lift$model)) {

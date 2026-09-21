@@ -15,7 +15,7 @@
 - `renv` is initialized with a lockfile for the first data-preparation slice.
 - The first cleaning run produced a validation report and SQLite database locally; generated data artifacts remain Git-ignored.
 - Phase 2 statistical analysis now produces descriptive comparisons, confidence intervals, segment rates, chi-square tests, correlations, plots, and a preliminary logistic interpretation report.
-- Phase 3 has a leakage-safe stratified split, logistic baseline, CART benchmark, held-out metrics, threshold trade-offs, calibration, lift, and saved local model objects. Random Forest/XGBoost remains pending because the current environment cannot retrieve the package source.
+- Phase 3 has a leakage-safe stratified split, logistic baseline, CART benchmark, class-balanced Random Forest benchmark, held-out metrics, threshold trade-offs, calibration, lift, leakage checks, class-balance diagnostics, segment stability summaries, and fairness proxy diagnostics. XGBoost remains optional follow-up work.
 - Phase 4 now has a runnable Shiny dashboard with management overview, portfolio performance, statistical analysis, credit-model evaluation, and an applicant risk simulator.
 
 Raw files are intentionally ignored by Git. The source URL, file names, and checksums must remain documented so the data can be restored reproducibly.
@@ -104,16 +104,16 @@ The application-funnel page, application dates, processing times, industry, geog
 - [x] Establish logistic regression as the baseline.
 - [ ] Add binning/Weight of Evidence/Information Value only where it improves interpretability and is validated.
 - [x] Train a first CART tree-based comparison model as a runnable benchmark.
-- [ ] Add a Random Forest or XGBoost comparison when the package source is available.
+- [x] Add a reproducible Random Forest comparison with fixed settings and class-balanced bootstrap samples.
 - [x] Create `R/train_models.R` with fixed seeds and saved preprocessing.
 - [x] Evaluate ROC-AUC, PR-AUC, KS, lift by risk decile, Brier score, calibration, and threshold metrics.
 - [x] Produce demonstration threshold trade-offs with explicit false-negative/false-positive metrics; do not select a lending-policy threshold.
 - [x] Save model objects and evaluation summaries under `models/` and `reports/generated/`.
-- [ ] Check for leakage, class imbalance, unstable segments, and possible fairness concerns.
+- [x] Check for leakage, class imbalance, unstable segments, and possible fairness concerns using available proxy segments.
 
 ### Acceptance criteria
 
-- Both models are evaluated on the same held-out data.
+- All three benchmark models are evaluated on the same held-out data.
 - The selected model is justified using discrimination, calibration, interpretability, and policy trade-offs.
 - Risk bands are reproducible and labelled as demonstration bands, not lending policy.
 - No unvalidated accuracy claim is used as the primary success measure.
@@ -177,7 +177,7 @@ The application-funnel page, application dates, processing times, industry, geog
 5. [x] Load the cleaned training data into SQLite and write the first KPI queries.
 6. [x] Review the findings before selecting final features and model scope.
 7. [x] Implement the first dashboard slice and verify the Shiny server outputs.
-8. [ ] Add a package-backed ensemble benchmark when a reproducible Random Forest/XGBoost source is available.
+8. [x] Add a package-backed Random Forest benchmark; XGBoost remains optional follow-up work.
 9. [ ] Add model monitoring and decide whether a separately labelled synthetic application-funnel table is justified.
 
 ## Data provenance checksums
