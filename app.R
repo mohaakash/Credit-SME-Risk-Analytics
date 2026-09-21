@@ -237,103 +237,170 @@ page_intro <- function(kicker, title, description) {
 
 plot_theme <- function() {
   graphics::par(
-    col = "#252821",
-    col.axis = "#252821",
-    col.lab = "#252821",
-    col.main = "#252821",
-    fg = "#606C38",
-    bg = "#E8DCC7",
+    col = "#263442",
+    col.axis = "#4B5563",
+    col.lab = "#263442",
+    col.main = "#263442",
+    fg = "#2B9EAB",
+    bg = "#FFFFFF",
     mar = c(5, 5, 3, 2)
   )
 }
 
 app_css <- "
   :root {
-    --sand: #E8DCC7;
-    --oat: #D4B895;
-    --sage: #8B9D83;
-    --clay: #B08B6E;
-    --terracotta: #C66B3D;
-    --ochre: #C08E3A;
-    --moss: #606C38;
-    --ink: #252821;
-    --white: #F7F3EA;
+    --surface: #F5F7F9;
+    --card: #FFFFFF;
+    --ink: #263442;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --teal: #2B9EAB;
+    --teal-soft: #EAF6F7;
+    --blue: #4388E8;
+    --blue-soft: #EDF4FF;
+    --green: #35A85A;
+    --orange: #E3AF3E;
+    --red: #E66B78;
+    --purple: #8065D6;
   }
+
+  * { box-sizing: border-box; }
 
   body {
-    background: var(--sand);
+    background: var(--surface);
     color: var(--ink);
-    font-family: 'Trebuchet MS', Arial, sans-serif;
-    font-size: 15px;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.025;
-    background-image: url(\"data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E\");
-    z-index: 10;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
   }
 
   .navbar {
-    background: var(--moss);
+    position: fixed;
+    z-index: 1000;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 220px;
+    min-height: 100vh;
+    background: var(--card);
     border: 0;
-    border-radius: 0 0 18px 18px;
-    box-shadow: 0 6px 18px rgba(37, 40, 33, 0.16);
+    border-right: 1px solid var(--line);
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
   }
 
-  .navbar-default .navbar-brand,
+  .navbar .container-fluid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    max-width: none;
+    height: 100vh;
+    padding: 22px 14px;
+  }
+
+  .navbar-header {
+    float: none;
+    width: 100%;
+    padding: 0 8px 20px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 16px;
+  }
+
+  .navbar-brand {
+    display: block;
+    height: auto;
+    padding: 0;
+    color: var(--ink) !important;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .navbar-toggle { display: none; }
+
+  .navbar-nav {
+    float: none;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: auto !important;
+    flex: none !important;
+    align-content: flex-start;
+    justify-content: flex-start !important;
+    margin: 0;
+  }
+
+  .navbar-default .navbar-nav > li {
+    float: none;
+    width: 100%;
+    margin: 2px 0;
+  }
+
   .navbar-default .navbar-nav > li > a {
-    color: var(--white);
+    color: var(--muted);
+    border-left: 3px solid transparent;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .navbar-nav .fa {
+    width: 18px;
+    margin-right: 8px;
+    text-align: center;
   }
 
   .navbar-default .navbar-nav > li > a:hover,
   .navbar-default .navbar-nav > .active > a,
-  .navbar-default .navbar-nav > .active > a:hover {
-    color: var(--ink);
-    background: var(--oat);
+  .navbar-default .navbar-nav > .active > a:hover,
+  .navbar-default .navbar-nav > .active > a:focus {
+    color: #197682;
+    background: var(--teal-soft);
+    border-left-color: var(--teal);
   }
 
-  .navbar-brand {
-    font-family: Georgia, serif;
-    font-size: 20px;
-    letter-spacing: -0.02em;
+  .tab-content {
+    min-height: 100vh;
+    margin-left: 220px;
+    background: var(--surface);
   }
 
-  .container-fluid {
-    max-width: 1500px;
-    padding: 28px 34px 48px;
+  .tab-content > .container-fluid {
+    max-width: none;
+    padding: 28px 32px 48px;
   }
 
   .page-intro {
-    padding: 24px 4px 22px;
-    border-bottom: 1px solid rgba(96, 108, 56, 0.35);
-    margin-bottom: 24px;
+    padding: 4px 0 20px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 20px;
   }
 
   .page-intro h1 {
-    font-family: Georgia, serif;
-    font-size: clamp(30px, 4vw, 54px);
-    line-height: 1.02;
-    letter-spacing: -0.04em;
-    margin: 4px 0 10px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: -0.035em;
+    margin: 3px 0 7px;
     color: var(--ink);
   }
 
   .page-intro p {
-    max-width: 720px;
-    font-size: 16px;
-    line-height: 1.55;
+    max-width: 850px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
     margin: 0;
   }
 
   .page-kicker {
-    color: var(--terracotta);
-    font-size: 12px;
+    color: var(--teal);
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
@@ -342,144 +409,201 @@ app_css <- "
   .metric-card,
   .notice,
   .simulator-result {
-    background: rgba(247, 243, 234, 0.78);
-    border: 1px solid rgba(96, 108, 56, 0.35);
-    border-radius: 18px;
-    box-shadow: 0 8px 22px rgba(37, 40, 33, 0.08);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(38, 52, 66, 0.06);
   }
 
   .panel {
-    padding: 18px 20px 20px;
-    margin-bottom: 22px;
+    padding: 16px 18px 18px;
+    margin-bottom: 18px;
   }
 
   .panel h3 {
-    font-family: Georgia, serif;
-    font-size: 22px;
-    margin: 0 0 5px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0 0 4px;
   }
 
   .panel-caption {
-    color: #60645A;
-    font-size: 13px;
-    margin-bottom: 15px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+    margin-bottom: 12px;
+  }
+
+  .row {
+    margin-left: -8px;
+    margin-right: -8px;
+  }
+
+  .row > [class*='col-'] {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .metric-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    margin-bottom: 22px;
+    gap: 10px;
+    margin-bottom: 18px;
   }
 
   .metric-card {
-    padding: 18px 20px;
-    border-left: 6px solid var(--terracotta);
+    padding: 14px 16px;
+    border-top: 3px solid var(--teal);
+  }
+
+  .metric-card:nth-child(2) { border-top-color: var(--blue); }
+  .metric-card:nth-child(3) { border-top-color: var(--orange); }
+  .metric-card:nth-child(4) { border-top-color: var(--red); }
+
+  .metric-card:hover {
+    box-shadow: 0 3px 9px rgba(38, 52, 66, 0.1);
   }
 
   .metric-label {
-    color: #60645A;
-    font-size: 12px;
+    color: var(--muted);
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
   }
 
   .metric-value {
-    font-family: Georgia, serif;
-    font-size: 34px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 29px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
     line-height: 1.1;
-    margin: 6px 0;
+    margin: 5px 0 4px;
   }
 
   .metric-note {
-    color: #60645A;
+    color: var(--muted);
     font-size: 12px;
   }
 
   .notice {
-    padding: 16px 18px;
-    background: var(--oat);
-    border-color: rgba(192, 142, 58, 0.58);
-    margin: 12px 0 22px;
+    padding: 12px 14px;
+    background: var(--teal-soft);
+    border-color: #C7E6E9;
+    margin: 10px 0 18px;
   }
 
-  .notice strong { color: var(--ink); }
+  .notice strong { color: #197682; }
 
   .form-control,
   .selectize-input,
   .selectize-control.single .selectize-input {
-    background: var(--white);
-    border: 1px solid rgba(96, 108, 56, 0.5);
-    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
     color: var(--ink);
   }
 
   .control-label {
-    color: var(--moss);
-    font-weight: 700;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
   }
 
   .btn-primary {
-    background: var(--terracotta);
-    border-color: var(--terracotta);
-    border-radius: 10px;
+    background: var(--teal);
+    border-color: var(--teal);
+    border-radius: 4px;
   }
 
   .btn-primary:hover,
   .btn-primary:focus {
-    background: var(--ochre);
-    border-color: var(--ochre);
+    background: #197682;
+    border-color: #197682;
   }
 
   .table {
-    background: var(--white);
-    border-radius: 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
     overflow: hidden;
+    font-size: 12px;
   }
 
   .table > thead > tr > th {
-    background: var(--moss);
-    color: var(--white);
-    border: 0;
+    background: #F3F4F6;
+    color: #374151;
+    border-bottom: 1px solid var(--line);
+    font-weight: 700;
+    white-space: nowrap;
   }
 
-  .table > tbody > tr > td { border-color: rgba(96, 108, 56, 0.18); }
+  .table > tbody > tr > td { border-color: var(--line); }
+  .table > tbody > tr:nth-child(even) { background: #FAFBFC; }
 
   .risk-result {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    gap: 10px;
     align-items: stretch;
   }
 
   .risk-score,
   .risk-band {
-    padding: 22px;
-    border-radius: 16px;
-    background: var(--moss);
-    color: var(--white);
+    padding: 18px;
+    border-radius: 6px;
+    background: var(--teal-soft);
+    border: 1px solid #C7E6E9;
+    color: #197682;
   }
 
   .risk-score .value,
   .risk-band .value {
-    font-family: Georgia, serif;
-    font-size: 36px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 31px;
+    font-weight: 700;
     margin-top: 5px;
   }
 
-  .risk-band { background: var(--terracotta); }
+  .risk-band {
+    background: var(--blue-soft);
+    border-color: #CFE0FC;
+    color: #3269B9;
+  }
 
   .shiny-plot-output,
   .plot-output {
-    background: var(--sand);
-    border-radius: 14px;
+    background: var(--card);
+    border-radius: 6px;
   }
 
   @media (max-width: 900px) {
     .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .risk-result { grid-template-columns: 1fr; }
-    .container-fluid { padding: 20px 16px 36px; }
+    .navbar {
+      position: relative;
+      width: 100%;
+      min-height: auto;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .navbar .container-fluid {
+      height: auto;
+      padding: 14px 16px;
+    }
+    .navbar-header {
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+    }
+    .navbar-nav {
+      flex-direction: row;
+      overflow-x: auto;
+      gap: 4px;
+    }
+    .navbar-default .navbar-nav > li { width: auto; }
+    .navbar-default .navbar-nav > li > a { white-space: nowrap; }
+    .tab-content { margin-left: 0; }
+    .tab-content > .container-fluid { padding: 20px 16px 36px; }
   }
 
   @media (max-width: 560px) {
@@ -489,15 +613,15 @@ app_css <- "
 
 theme <- bslib::bs_theme(
   version = 5,
-  bg = "#E8DCC7",
-  fg = "#252821",
-  primary = "#606C38",
-  secondary = "#B08B6E",
-  success = "#606C38",
-  warning = "#C08E3A",
-  danger = "#C66B3D",
-  base_font = bslib::font_collection("Trebuchet MS", "Arial", "sans-serif"),
-  heading_font = bslib::font_collection("Georgia", "serif")
+  bg = "#F5F7F9",
+  fg = "#263442",
+  primary = "#2B9EAB",
+  secondary = "#6B7280",
+  success = "#35A85A",
+  warning = "#E3AF3E",
+  danger = "#E66B78",
+  base_font = bslib::font_collection("Arial", "Helvetica", "sans-serif"),
+  heading_font = bslib::font_collection("Arial", "Helvetica", "sans-serif")
 )
 
 ui <- shiny::tagList(
@@ -507,10 +631,10 @@ ui <- shiny::tagList(
     id = "main_nav",
     theme = theme,
     tabPanel(
-      "Overview",
+      tags$span(shiny::icon("dashboard"), "Dashboard"),
       page_intro(
-        "Give Me Some Credit / portfolio view",
-        "A clear view of borrower risk.",
+        "Dashboard",
+        "Portfolio overview",
         "Explore default patterns, risk-band mix, and segment movement in the cleaned training portfolio. All risk outputs are demonstrations based on the public dataset."
       ),
       sidebarLayout(
@@ -534,7 +658,7 @@ ui <- shiny::tagList(
       )
     ),
     tabPanel(
-      "Portfolio performance",
+      tags$span(shiny::icon("bar-chart"), "Portfolio performance"),
       page_intro(
         "Portfolio performance",
         "Find the segments carrying the signal.",
@@ -554,7 +678,7 @@ ui <- shiny::tagList(
       )
     ),
     tabPanel(
-      "Statistical analysis",
+      tags$span(shiny::icon("line-chart"), "Statistical analysis"),
       page_intro(
         "Statistical analysis",
         "Separate pattern from policy.",
@@ -575,7 +699,7 @@ ui <- shiny::tagList(
       div(class = "panel", h3("Selected segment confidence intervals"), div(class = "panel-caption", "Wilson 95% intervals for age, income, and dependents groupings."), tableOutput("stat_segment_table"))
     ),
     tabPanel(
-      "Credit model",
+      tags$span(shiny::icon("calculator"), "Credit model"),
       page_intro(
         "Credit-scoring model",
         "Rank risk, inspect the trade-offs.",
@@ -592,7 +716,7 @@ ui <- shiny::tagList(
       div(class = "notice", strong("Model boundary: "), "The current comparison includes raw logistic, WoE logistic, CART, Random Forest, and XGBoost. The class-weighted ensembles have poor probability calibration and are not production models.")
     ),
     tabPanel(
-      "Monitoring",
+      tags$span(shiny::icon("area-chart"), "Monitoring"),
       page_intro(
         "Model monitoring",
         "Watch the evidence, name the gap.",
@@ -608,7 +732,7 @@ ui <- shiny::tagList(
       div(class = "panel", h3("Logistic calibration check"), div(class = "panel-caption", "Decile 1 contains the highest predicted-risk borrowers. This is a non-temporal demonstration comparison."), tableOutput("monitoring_calibration_table"))
     ),
     tabPanel(
-      "Risk simulator",
+      tags$span(shiny::icon("user"), "Risk simulator"),
       page_intro(
         "Applicant risk simulator",
         "Test the saved preprocessing path.",
@@ -670,7 +794,7 @@ server <- function(input, output, session) {
     plot_theme()
     graphics::barplot(
       counts,
-      col = c("#8B9D83", "#C08E3A", "#B08B6E", "#C66B3D"),
+      col = c("#D9F2F3", "#DCEBFF", "#E9E2FF", "#FDE6CC"),
       names.arg = names(counts),
       ylab = "Borrower count",
       main = paste0("Risk bands (n = ", format_number(nrow(data)), ")")
@@ -694,7 +818,7 @@ server <- function(input, output, session) {
     locations <- graphics::barplot(
       summary$default_rate * 100,
       names.arg = summary$age_band,
-      col = "#606C38",
+      col = "#4388E8",
       ylab = "Observed default rate (%)",
       main = "Default rate by age band",
       ylim = c(0, max(summary$default_rate * 100) * 1.28)
@@ -754,7 +878,7 @@ server <- function(input, output, session) {
     locations <- graphics::barplot(
       summary$default_rate * 100,
       names.arg = summary$segment,
-      col = "#C66B3D",
+      col = "#2B9EAB",
       ylab = "Observed default rate (%)",
       main = "Observed default rate",
       ylim = c(0, max(summary$default_rate * 100) * 1.28),
@@ -802,7 +926,7 @@ server <- function(input, output, session) {
       names.arg = unname(labels[values$variable]),
       horiz = TRUE,
       las = 1,
-      col = "#B08B6E",
+      col = "#9EC8CF",
       xlab = "Missing rows (%)",
       main = "Source missingness"
     )
@@ -833,7 +957,7 @@ server <- function(input, output, session) {
     counts <- table(group)
     graphics::boxplot(
       distribution_values ~ group,
-      col = c("#8B9D83", "#C66B3D"),
+      col = c("#D9F2F3", "#F8D9DC"),
       ylab = "Source value",
       main = paste("Distribution of", label),
       outline = FALSE
@@ -857,7 +981,7 @@ server <- function(input, output, session) {
       seq_len(ncol(matrix)),
       seq_len(nrow(matrix)),
       matrix[nrow(matrix):1, , drop = FALSE],
-      col = grDevices::colorRampPalette(c("#2166ac", "#F7F3EA", "#C66B3D"))(100),
+      col = grDevices::colorRampPalette(c("#DCEBFF", "#FFFFFF", "#F8D9DC"))(100),
       zlim = c(-1, 1),
       axes = FALSE,
       main = "Spearman correlation"
@@ -915,7 +1039,7 @@ server <- function(input, output, session) {
       distribution_matrix,
       beside = TRUE,
       names.arg = values$bin,
-      col = c("#8B9D83", "#C66B3D"),
+      col = c("#91C3CB", "#4388E8"),
       border = NA,
       las = 2,
       ylab = "Share of non-missing scores",
@@ -924,7 +1048,7 @@ server <- function(input, output, session) {
     graphics::legend(
       "topright",
       legend = c("Reference train", "Comparison test"),
-      fill = c("#8B9D83", "#C66B3D"),
+      fill = c("#91C3CB", "#4388E8"),
       bty = "n"
     )
   }, res = 110)
@@ -940,13 +1064,13 @@ server <- function(input, output, session) {
       names.arg = unname(monitoring_feature_labels[rev(values$variable)]),
       horiz = TRUE,
       las = 1,
-      col = "#B08B6E",
+      col = "#9EC8CF",
       border = NA,
       xlab = "PSI",
       main = "Feature distribution shift",
       cex.names = 0.8
     )
-    graphics::abline(v = 0.10, lty = 2, col = "#C08E3A")
+    graphics::abline(v = 0.10, lty = 2, col = "#E3AF3E")
   }, res = 110)
 
   output$monitoring_summary_table <- renderTable({
@@ -1051,7 +1175,7 @@ server <- function(input, output, session) {
 
   output$model_roc <- renderPlot({
     plot_theme()
-    colors <- c(Logistic = "#2166ac", Logistic_WOE = "#8c6bb1", CART = "#b2182b", RandomForest = "#606C38", XGBoost = "#C66B3D")
+    colors <- c(Logistic = "#4388E8", Logistic_WOE = "#8065D6", CART = "#E66B78", RandomForest = "#35A85A", XGBoost = "#E3AF3E")
     graphics::plot(
       0,
       0,
@@ -1071,7 +1195,7 @@ server <- function(input, output, session) {
         lwd = 2
       )
     }
-    graphics::abline(0, 1, lty = 2, col = "#8B9D83")
+    graphics::abline(0, 1, lty = 2, col = "#9CA3AF")
     legend_labels <- paste0(
       unname(model_display_labels[model_metrics$model]),
       " ROC-AUC = ",
@@ -1089,8 +1213,8 @@ server <- function(input, output, session) {
   output$model_calibration_plot <- renderPlot({
     plot_theme()
     graphics::plot(0, 0, type = "n", xlim = c(0, max(model_calibration$predicted_default_rate) * 1.05), ylim = c(0, max(model_calibration$observed_default_rate) * 1.05), xlab = "Mean predicted default rate", ylab = "Observed default rate", main = "Calibration by risk decile")
-    graphics::abline(0, 1, lty = 2, col = "#8B9D83")
-    colors <- c(Logistic = "#2166ac", Logistic_WOE = "#8c6bb1", CART = "#b2182b", RandomForest = "#606C38", XGBoost = "#C66B3D")
+    graphics::abline(0, 1, lty = 2, col = "#9CA3AF")
+    colors <- c(Logistic = "#4388E8", Logistic_WOE = "#8065D6", CART = "#E66B78", RandomForest = "#35A85A", XGBoost = "#E3AF3E")
     for (model_name in unique(model_calibration$model)) {
       values <- model_calibration[model_calibration$model == model_name, , drop = FALSE]
       graphics::lines(values$predicted_default_rate, values$observed_default_rate, type = "b", col = colors[[model_name]], lwd = 2, pch = 19)
@@ -1100,9 +1224,9 @@ server <- function(input, output, session) {
 
   output$model_lift_plot <- renderPlot({
     plot_theme()
-    colors <- c(Logistic = "#2166ac", Logistic_WOE = "#8c6bb1", CART = "#b2182b", RandomForest = "#606C38", XGBoost = "#C66B3D")
+    colors <- c(Logistic = "#4388E8", Logistic_WOE = "#8065D6", CART = "#E66B78", RandomForest = "#35A85A", XGBoost = "#E3AF3E")
     graphics::plot(1:10, rep(NA_real_, 10), type = "n", xlim = c(1, 10), ylim = c(0, max(model_lift$lift) * 1.05), xlab = "Risk decile (1 = highest predicted risk)", ylab = "Observed lift", main = "Lift by risk decile")
-    graphics::abline(h = 1, lty = 2, col = "#8B9D83")
+    graphics::abline(h = 1, lty = 2, col = "#9CA3AF")
     for (model_name in unique(model_lift$model)) {
       values <- model_lift[model_lift$model == model_name, , drop = FALSE]
       graphics::lines(values$decile, values$lift, type = "b", col = colors[[model_name]], lwd = 2, pch = 19)
