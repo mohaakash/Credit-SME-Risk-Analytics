@@ -26,7 +26,12 @@ required_artifacts <- c(
   file.path(project_root, "reports", "generated", "numeric_group_comparisons.csv"),
   file.path(project_root, "reports", "generated", "missingness.csv"),
   file.path(project_root, "reports", "generated", "segment_default_rates.csv"),
-  file.path(project_root, "reports", "generated", "correlation_matrix_spearman.csv")
+  file.path(project_root, "reports", "generated", "correlation_matrix_spearman.csv"),
+  file.path(project_root, "reports", "generated", "monitoring_summary.csv"),
+  file.path(project_root, "reports", "generated", "monitoring_distributions.csv"),
+  file.path(project_root, "reports", "generated", "monitoring_psi.csv"),
+  file.path(project_root, "reports", "generated", "monitoring_feature_drift.csv"),
+  file.path(project_root, "reports", "generated", "monitoring_calibration.csv")
 )
 missing_artifacts <- required_artifacts[!file.exists(required_artifacts)]
 if (length(missing_artifacts) > 0) {
@@ -75,6 +80,26 @@ segment_rates <- readr::read_csv(
 )
 correlation_data <- readr::read_csv(
   file.path(project_root, "reports", "generated", "correlation_matrix_spearman.csv"),
+  show_col_types = FALSE
+)
+monitoring_summary <- readr::read_csv(
+  file.path(project_root, "reports", "generated", "monitoring_summary.csv"),
+  show_col_types = FALSE
+)
+monitoring_distributions <- readr::read_csv(
+  file.path(project_root, "reports", "generated", "monitoring_distributions.csv"),
+  show_col_types = FALSE
+)
+monitoring_psi <- readr::read_csv(
+  file.path(project_root, "reports", "generated", "monitoring_psi.csv"),
+  show_col_types = FALSE
+)
+monitoring_feature_drift <- readr::read_csv(
+  file.path(project_root, "reports", "generated", "monitoring_feature_drift.csv"),
+  show_col_types = FALSE
+)
+monitoring_calibration <- readr::read_csv(
+  file.path(project_root, "reports", "generated", "monitoring_calibration.csv"),
   show_col_types = FALSE
 )
 logistic_model <- readRDS(file.path(project_root, "models", "logistic_model.rds"))
@@ -161,6 +186,19 @@ stat_distribution_variables <- c(
   "60-89 days late" = "number_of_time60_89days_past_due_not_worse",
   "90+ days late" = "number_of_times90days_late",
   "Dependents" = "number_of_dependents"
+)
+
+monitoring_feature_labels <- c(
+  age = "Age",
+  monthly_income = "Monthly income",
+  debt_ratio = "Debt ratio",
+  revolving_utilization_of_unsecured_lines = "Revolving utilization",
+  number_of_open_credit_lines_and_loans = "Open credit lines",
+  number_of_time30_59days_past_due_not_worse = "30-59 days late",
+  number_of_time60_89days_past_due_not_worse = "60-89 days late",
+  number_of_times90days_late = "90+ days late",
+  number_real_estate_loans_or_lines = "Real-estate loans",
+  number_of_dependents = "Dependents"
 )
 
 format_number <- function(value, digits = 0) {
@@ -554,6 +592,22 @@ ui <- shiny::tagList(
       div(class = "notice", strong("Model boundary: "), "The current comparison includes raw logistic, WoE logistic, CART, Random Forest, and XGBoost. The class-weighted ensembles have poor probability calibration and are not production models.")
     ),
     tabPanel(
+      "Monitoring",
+      page_intro(
+        "Model monitoring",
+        "Watch the evidence, name the gap.",
+        "This page demonstrates prediction drift, feature drift, and calibration checks using the fixed Phase 3 train/test split. The source data has no application date, so these are non-temporal diagnostics rather than production alerts."
+      ),
+      div(class = "notice", strong("Monitoring boundary: "), "No synthetic monitoring rows or simulated time periods were generated. PSI thresholds are screening heuristics and must be calibrated against timestamped operational history before use."),
+      fluidRow(
+        column(6, div(class = "panel", h3("Prediction distribution"), div(class = "panel-caption", "Reference train versus comparison test; both are analytical slices, not calendar periods."), plotOutput("monitoring_prediction_plot", height = "360px"))),
+        column(6, div(class = "panel", h3("Feature PSI"), div(class = "panel-caption", "Population Stability Index from reference-train quantile bins. Lower values indicate more similar distributions in this demonstration."), plotOutput("monitoring_psi_plot", height = "360px")))
+      ),
+      div(class = "panel", h3("Monitoring scope"), tableOutput("monitoring_summary_table")),
+      div(class = "panel", h3("Feature drift summary"), div(class = "panel-caption", "Mean differences can be influenced by extreme values; median and missingness changes are shown alongside PSI."), tableOutput("monitoring_feature_table")),
+      div(class = "panel", h3("Logistic calibration check"), div(class = "panel-caption", "Decile 1 contains the highest predicted-risk borrowers. This is a non-temporal demonstration comparison."), tableOutput("monitoring_calibration_table"))
+    ),
+    tabPanel(
       "Risk simulator",
       page_intro(
         "Applicant risk simulator",
@@ -848,6 +902,104 @@ server <- function(input, output, session) {
         Borrowers = borrower_count,
         `Default rate` = default_rate,
         `Wilson 95% interval` = ci
+      )
+  }, striped = TRUE, bordered = FALSE, spacing = "s", rownames = FALSE)
+
+  output$monitoring_prediction_plot <- renderPlot({
+    values <- monitoring_psi |>
+      dplyr::filter(metric_type == "prediction", variable == "predicted_risk")
+    plot_theme()
+    graphics::par(mar = c(8, 5, 3, 2))
+    distribution_matrix <- rbind(values$reference_pct, values$comparison_pct)
+    graphics::barplot(
+      distribution_matrix,
+      beside = TRUE,
+      names.arg = values$bin,
+      col = c("#8B9D83", "#C66B3D"),
+      border = NA,
+      las = 2,
+      ylab = "Share of non-missing scores",
+      main = "Prediction distribution by reference bin"
+    )
+    graphics::legend(
+      "topright",
+      legend = c("Reference train", "Comparison test"),
+      fill = c("#8B9D83", "#C66B3D"),
+      bty = "n"
+    )
+  }, res = 110)
+
+  output$monitoring_psi_plot <- renderPlot({
+    values <- monitoring_feature_drift |>
+      dplyr::arrange(psi) |>
+      dplyr::slice_tail(n = min(10, nrow(monitoring_feature_drift)))
+    plot_theme()
+    graphics::par(mar = c(5, 13, 3, 2))
+    graphics::barplot(
+      rev(values$psi),
+      names.arg = unname(monitoring_feature_labels[rev(values$variable)]),
+      horiz = TRUE,
+      las = 1,
+      col = "#B08B6E",
+      border = NA,
+      xlab = "PSI",
+      main = "Feature distribution shift",
+      cex.names = 0.8
+    )
+    graphics::abline(v = 0.10, lty = 2, col = "#C08E3A")
+  }, res = 110)
+
+  output$monitoring_summary_table <- renderTable({
+    monitoring_summary |>
+      dplyr::rename(
+        Check = check,
+        Status = status,
+        Details = details
+      )
+  }, striped = TRUE, bordered = FALSE, spacing = "s", rownames = FALSE)
+
+  output$monitoring_feature_table <- renderTable({
+    monitoring_feature_drift |>
+      dplyr::slice_head(n = 10) |>
+      dplyr::mutate(
+        variable = unname(monitoring_feature_labels[variable]),
+        reference_mean = format_number(reference_mean, 3),
+        comparison_mean = format_number(comparison_mean, 3),
+        reference_median = format_number(reference_median, 3),
+        comparison_median = format_number(comparison_median, 3),
+        psi = format_number(psi, 4),
+        missing_rate_difference = format_percentage(missing_rate_difference, 2)
+      ) |>
+      dplyr::select(variable, reference_mean, comparison_mean, reference_median, comparison_median, missing_rate_difference, psi, psi_interpretation) |>
+      dplyr::rename(
+        Feature = variable,
+        `Reference mean` = reference_mean,
+        `Comparison mean` = comparison_mean,
+        `Reference median` = reference_median,
+        `Comparison median` = comparison_median,
+        `Missing-rate change` = missing_rate_difference,
+        PSI = psi,
+        Interpretation = psi_interpretation
+      )
+  }, striped = TRUE, bordered = FALSE, spacing = "s", rownames = FALSE)
+
+  output$monitoring_calibration_table <- renderTable({
+    monitoring_calibration |>
+      dplyr::filter(period == "comparison_test") |>
+      dplyr::mutate(
+        predicted_default_rate = format_percentage(predicted_default_rate),
+        observed_default_rate = format_percentage(observed_default_rate),
+        calibration_gap = format_percentage(calibration_gap),
+        absolute_calibration_gap = format_percentage(absolute_calibration_gap)
+      ) |>
+      dplyr::select(decile, borrower_count, predicted_default_rate, observed_default_rate, calibration_gap, absolute_calibration_gap) |>
+      dplyr::rename(
+        Decile = decile,
+        Borrowers = borrower_count,
+        `Predicted default rate` = predicted_default_rate,
+        `Observed default rate` = observed_default_rate,
+        `Calibration gap` = calibration_gap,
+        `Absolute gap` = absolute_calibration_gap
       )
   }, striped = TRUE, bordered = FALSE, spacing = "s", rownames = FALSE)
 

@@ -17,6 +17,7 @@
 - Phase 2 statistical analysis now produces descriptive comparisons, confidence intervals, segment rates, chi-square tests, correlations, plots, and a preliminary logistic interpretation report.
 - Phase 3 has a leakage-safe stratified split, raw logistic baseline, training-only WoE/IV candidate, CART benchmark, class-balanced Random Forest benchmark, XGBoost benchmark, held-out metrics, threshold trade-offs, calibration, lift, leakage checks, class-balance diagnostics, segment stability summaries, and fairness proxy diagnostics.
 - Phase 4 now has a runnable Shiny dashboard with management overview, portfolio performance, statistical analysis, credit-model evaluation, and an applicant risk simulator.
+- Phase 5 now has non-temporal prediction/feature drift diagnostics, PSI, calibration monitoring, business findings, policy-validation recommendations, responsible-use documentation, and dashboard captures.
 
 Raw files are intentionally ignored by Git. The source URL, file names, and checksums must remain documented so the data can be restored reproducibly.
 
@@ -147,20 +148,20 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ### Tasks
 
-- [ ] Create `R/model_monitoring.R`.
-- [ ] Add prediction-distribution summaries and a demonstration PSI workflow.
-- [ ] Add feature-drift and calibration checks where comparison periods are available.
-- [ ] Clearly mark any simulated monitoring periods as synthetic.
-- [ ] Write the final README business findings.
-- [ ] Add a section titled `Credit-policy recommendations`.
-- [ ] Add limitations, responsible-use, leakage, dataset-representativeness, and fairness statements.
-- [ ] Capture dashboard screenshots or a short demo video.
+- [x] Create `R/model_monitoring.R`.
+- [x] Add prediction-distribution summaries and a demonstration PSI workflow.
+- [x] Add feature-drift and calibration checks where comparison periods are available.
+- [x] Clearly mark any simulated monitoring periods as synthetic; this implementation generates no synthetic monitoring periods.
+- [x] Write the final README business findings.
+- [x] Add a section titled `Credit-policy recommendations`.
+- [x] Add limitations, responsible-use, leakage, dataset-representativeness, and fairness statements.
+- [x] Capture dashboard screenshots for the monitoring and model-evaluation pages.
 
 ### Acceptance criteria
 
-- Monitoring outputs distinguish real observations from simulated examples.
-- Recommendations are traceable to analysis outputs and are not presented as actual banking policy.
-- The project can be understood and run without relying on undocumented local state.
+- [x] Monitoring outputs distinguish real observations from simulated examples.
+- [x] Recommendations are traceable to analysis outputs and are not presented as actual banking policy.
+- [x] The project can be understood and run without relying on undocumented local state.
 
 ## Phase 4 implementation notes
 
@@ -170,6 +171,13 @@ The application-funnel page, application dates, processing times, industry, geog
 - The Credit-Scoring Model page surfaces the held-out interpretation: WoE logistic is the strongest interpretable candidate, while class-weighted ensembles require calibration before any production use.
 - The visual system uses an organic earth-tone palette, rounded analytical cards, humanist typography, and a restrained grain texture to keep the dashboard approachable while retaining analytical clarity.
 - The current Shiny runtime uses base Shiny tables and plots plus `bslib`; no optional browser-side chart dependency is required.
+
+## Phase 5 implementation notes
+
+- `R/model_monitoring.R` compares the fixed stratified `reference_train` and `comparison_test` slices because the source has no date or observation-window field.
+- Monitoring outputs are written to `reports/generated/monitoring_*.csv`; the tracked interpretation is [reports/model-monitoring-report.md](../reports/model-monitoring-report.md).
+- The dashboard Monitoring page labels the train/test comparison as non-temporal and states that PSI thresholds are screening heuristics rather than production alerts.
+- Dashboard captures are stored under `screenshots/` and intentionally exclude raw data and model artifacts.
 
 ## Immediate next sprint
 
@@ -181,7 +189,7 @@ The application-funnel page, application dates, processing times, industry, geog
 6. [x] Review the findings before selecting final features and model scope.
 7. [x] Implement the first dashboard slice and verify the Shiny server outputs.
 8. [x] Add package-backed Random Forest and XGBoost benchmarks plus training-only WoE/IV screening.
-9. [ ] Add model monitoring and decide whether a separately labelled synthetic application-funnel table is justified.
+9. [x] Add non-temporal model monitoring and decide that a separately labelled synthetic application-funnel table is not justified for the current release.
 
 ## Data provenance checksums
 

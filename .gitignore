@@ -11,6 +11,8 @@ screenshots/*
 !models/.gitkeep
 !reports/generated/.gitkeep
 !screenshots/.gitkeep
+!screenshots/phase-5-monitoring-dashboard.jpg
+!screenshots/phase-5-model-evaluation-dashboard.jpg
 
 # R project files and local caches
 .Rhistory
