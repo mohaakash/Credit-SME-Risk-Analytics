@@ -2,6 +2,10 @@
 
 An R and Shiny project for exploring credit-risk patterns, comparing default-risk models, and presenting portfolio-monitoring insights through an interactive dashboard.
 
+## Dashboard preview
+
+![Dashboard overview](screenshots/dashboard-overview.png)
+
 ## Project status
 
 The repository is initialized, `renv` is configured, and the reproducible data-cleaning, statistical-analysis, modeling, monitoring, and Shiny dashboard slices are available. The project validates the Kaggle training file, writes a cleaned CSV and SQLite database locally, generates analysis, model-evaluation, and monitoring reports, and serves an interactive dashboard from `app.R`. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
@@ -200,11 +204,7 @@ Rscript -e 'shiny::runApp(".", launch.browser = TRUE)'
 
 If startup reports missing artifacts, rerun the complete pipeline in the order shown above.
 
-## Dashboard captures
-
-### Dashboard overview
-
-![Dashboard overview](screenshots/dashboard-overview.png)
+## Additional dashboard captures
 
 ### Model monitoring
 
