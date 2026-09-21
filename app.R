@@ -294,6 +294,7 @@ app_css <- "
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    justify-content: flex-start !important;
     max-width: none;
     height: 100vh;
     padding: 22px 14px;
@@ -323,7 +324,7 @@ app_css <- "
   .navbar-nav {
     float: none;
     display: flex;
-    flex-direction: column;
+    flex-direction: column !important;
     width: 100%;
     height: auto !important;
     flex: none !important;
@@ -625,7 +626,7 @@ app_css <- "
       margin-bottom: 10px;
     }
     .navbar-nav {
-      flex-direction: row;
+      flex-direction: row !important;
       overflow-x: auto;
       gap: 4px;
     }
