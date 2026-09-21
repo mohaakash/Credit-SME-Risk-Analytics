@@ -11,6 +11,7 @@ screenshots/*
 !models/.gitkeep
 !reports/generated/.gitkeep
 !screenshots/.gitkeep
+!screenshots/dashboard-overview.png
 !screenshots/phase-5-monitoring-dashboard.jpg
 !screenshots/phase-5-model-evaluation-dashboard.jpg
 

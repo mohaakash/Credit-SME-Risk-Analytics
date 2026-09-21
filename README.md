@@ -202,6 +202,8 @@ If startup reports missing artifacts, rerun the complete pipeline in the order s
 
 ## Dashboard captures
 
+![Dashboard overview](screenshots/dashboard-overview.png)
+
 ![Phase 5 monitoring page](screenshots/phase-5-monitoring-dashboard.jpg)
 
 ![Model evaluation page](screenshots/phase-5-model-evaluation-dashboard.jpg)
