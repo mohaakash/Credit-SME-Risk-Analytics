@@ -19,6 +19,10 @@ screenshots/*
 renv/library/
 renv/staging/
 renv/cache/
+.r-env/
+.r-debian/
+bin/R
+bin/Rscript
 
 # Local SQLite databases
 *.sqlite
