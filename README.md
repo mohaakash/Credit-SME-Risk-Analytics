@@ -4,7 +4,7 @@ An R and Shiny project for exploring credit-risk patterns, comparing default-ris
 
 ## Project status
 
-The repository is initialized, `renv` is configured, and the reproducible data-cleaning, statistical-analysis, modeling, and Shiny dashboard slices are available. The project validates the Kaggle training file, writes a cleaned CSV and SQLite database locally, generates analysis and model-evaluation reports, and serves an interactive dashboard from `app.R`. XGBoost comparison and model monitoring remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
+The repository is initialized, `renv` is configured, and the reproducible data-cleaning, statistical-analysis, modeling, and Shiny dashboard slices are available. The project validates the Kaggle training file, writes a cleaned CSV and SQLite database locally, generates analysis and model-evaluation reports, and serves an interactive dashboard from `app.R`. Model monitoring remains planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
 
 ## Dataset
 
@@ -19,7 +19,7 @@ The downloaded files are stored in `data/raw/` and intentionally ignored by Git.
 - Data-quality profiling and exploratory analysis
 - SQLite-backed KPI and portfolio queries
 - Interpretable logistic-regression credit-risk model
-- CART and Random Forest comparison models, with XGBoost documented as a follow-up
+- CART, Random Forest, and XGBoost comparison models
 - ROC-AUC, PR-AUC, KS, lift, calibration, and threshold analysis
 - Shiny pages for management overview, portfolio performance, statistical analysis, and model evaluation
 - Applicant risk simulator for demonstration purposes
@@ -27,7 +27,6 @@ The downloaded files are stored in `data/raw/` and intentionally ignored by Git.
 ## Planned capabilities
 
 - Model-drift, calibration, and data-quality monitoring
-- XGBoost comparison when the package source is available
 - A defensible application-funnel dataset or explicitly labelled synthetic funnel page
 
 ## Planned repository structure

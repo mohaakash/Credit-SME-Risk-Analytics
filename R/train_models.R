@@ -271,6 +271,35 @@ run_model_training <- function(project_root = getwd()) {
   )
   training_target <- target[training_indices]
   test_target <- target[test_indices]
+  class_counts <- table(factor(training_target, levels = c(0, 1)))
+
+  woe_preprocessor <- fit_woe_preprocessor(
+    cleaned[training_indices, , drop = FALSE],
+    training_target
+  )
+  woe_training_features <- apply_woe_preprocessor(
+    cleaned[training_indices, , drop = FALSE],
+    woe_preprocessor
+  )
+  woe_test_features <- apply_woe_preprocessor(
+    cleaned[test_indices, , drop = FALSE],
+    woe_preprocessor
+  )
+  woe_formula <- stats::as.formula(
+    paste("target ~", paste(names(woe_training_features), collapse = " + "))
+  )
+  woe_training_data <- woe_training_features
+  woe_training_data$target <- training_target
+  woe_logistic_model <- stats::glm(
+    woe_formula,
+    data = woe_training_data,
+    family = stats::binomial()
+  )
+  woe_logistic_score <- as.numeric(stats::predict(
+    woe_logistic_model,
+    newdata = woe_test_features,
+    type = "response"
+  ))
 
   formula <- stats::as.formula(
     paste("target ~", paste(preprocessor$feature_names, collapse = " + "))
@@ -304,7 +333,6 @@ run_model_training <- function(project_root = getwd()) {
   tree_probabilities <- stats::predict(tree_model, newdata = test_features, type = "prob")
   tree_score <- as.numeric(tree_probabilities[, "1"])
 
-  class_counts <- table(factor(training_target, levels = c(0, 1)))
   balanced_sample_size <- rep(min(class_counts), length(class_counts))
   set.seed(seed)
   random_forest_model <- randomForest::randomForest(
@@ -324,10 +352,40 @@ run_model_training <- function(project_root = getwd()) {
   )
   random_forest_score <- as.numeric(random_forest_probabilities[, "1"])
 
+  xgboost_training_data <- xgboost::xgb.DMatrix(
+    data = as.matrix(training_features),
+    label = training_target
+  )
+  xgboost_test_data <- xgboost::xgb.DMatrix(
+    data = as.matrix(test_features),
+    label = test_target
+  )
+  xgboost_model <- xgboost::xgb.train(
+    params = list(
+      objective = "binary:logistic",
+      eval_metric = "logloss",
+      max_depth = 4L,
+      eta = 0.05,
+      subsample = 0.8,
+      colsample_bytree = 0.8,
+      min_child_weight = 25,
+      scale_pos_weight = as.numeric(class_counts[["0"]] / class_counts[["1"]]),
+      tree_method = "hist",
+      nthread = 2L,
+      seed = seed
+    ),
+    data = xgboost_training_data,
+    nrounds = 250L,
+    verbose = 0
+  )
+  xgboost_score <- as.numeric(stats::predict(xgboost_model, xgboost_test_data))
+
   model_scores <- list(
     Logistic = logistic_score,
+    Logistic_WOE = woe_logistic_score,
     CART = tree_score,
-    RandomForest = random_forest_score
+    RandomForest = random_forest_score,
+    XGBoost = xgboost_score
   )
   metrics <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
     model_metrics(model_name, test_target, model_scores[[model_name]])
@@ -434,6 +492,15 @@ run_model_training <- function(project_root = getwd()) {
       "Only training_target is passed to model fitting; test_target is used for evaluation."
     )
   )
+  woe_iv <- woe_iv_summary(woe_preprocessor)
+  woe_iv_by_variable <- woe_iv |>
+    dplyr::group_by(variable) |>
+    dplyr::summarise(
+      information_value = sum(information_value),
+      bin_count = dplyr::n(),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(dplyr::desc(information_value))
 
   logistic_coefficients <- as.data.frame(summary(logistic_model)$coefficients)
   logistic_coefficients$feature <- rownames(logistic_coefficients)
@@ -443,6 +510,21 @@ run_model_training <- function(project_root = getwd()) {
     dplyr::filter(feature != "(Intercept)") |>
     dplyr::transmute(
       model = "Logistic",
+      feature = feature,
+      importance = abs(estimate),
+      estimate = estimate,
+      odds_ratio = exp(estimate),
+      p_value = p_value
+    ) |>
+    dplyr::arrange(dplyr::desc(importance))
+  woe_coefficients <- as.data.frame(summary(woe_logistic_model)$coefficients)
+  woe_coefficients$feature <- rownames(woe_coefficients)
+  rownames(woe_coefficients) <- NULL
+  names(woe_coefficients)[1:4] <- c("estimate", "std_error", "z_value", "p_value")
+  woe_importance <- woe_coefficients |>
+    dplyr::filter(feature != "(Intercept)") |>
+    dplyr::transmute(
+      model = "Logistic_WOE",
       feature = feature,
       importance = abs(estimate),
       estimate = estimate,
@@ -484,10 +566,33 @@ run_model_training <- function(project_root = getwd()) {
     p_value = NA_real_
   ) |>
     dplyr::arrange(dplyr::desc(importance))
+  xgboost_importance_values <- xgboost::xgb.importance(model = xgboost_model)
+  xgboost_importance <- if (nrow(xgboost_importance_values) == 0) {
+    tibble::tibble(
+      model = "XGBoost",
+      feature = character(),
+      importance = numeric(),
+      estimate = numeric(),
+      odds_ratio = numeric(),
+      p_value = numeric()
+    )
+  } else {
+    tibble::tibble(
+      model = "XGBoost",
+      feature = xgboost_importance_values$Feature,
+      importance = xgboost_importance_values$Gain,
+      estimate = NA_real_,
+      odds_ratio = NA_real_,
+      p_value = NA_real_
+    ) |>
+      dplyr::arrange(dplyr::desc(importance))
+  }
   importance <- dplyr::bind_rows(
     logistic_importance,
+    woe_importance,
     tree_importance,
-    random_forest_importance
+    random_forest_importance,
+    xgboost_importance
   )
 
   split_manifest <- tibble::tibble(
@@ -507,10 +612,15 @@ run_model_training <- function(project_root = getwd()) {
   readr::write_csv(leakage_checks, file.path(generated_dir, "leakage_checks.csv"))
   readr::write_csv(segment_diagnostics, file.path(generated_dir, "segment_performance.csv"))
   readr::write_csv(fairness_proxy, file.path(generated_dir, "fairness_proxy.csv"))
+  readr::write_csv(woe_iv, file.path(generated_dir, "woe_iv_bins.csv"))
+  readr::write_csv(woe_iv_by_variable, file.path(generated_dir, "woe_iv_summary.csv"))
 
   saveRDS(logistic_model, file.path(models_dir, "logistic_model.rds"))
   saveRDS(tree_model, file.path(models_dir, "cart_model.rds"))
   saveRDS(random_forest_model, file.path(models_dir, "random_forest_model.rds"))
+  saveRDS(woe_logistic_model, file.path(models_dir, "logistic_woe_model.rds"))
+  saveRDS(woe_preprocessor, file.path(models_dir, "woe_preprocessor.rds"))
+  xgboost::xgb.save(xgboost_model, file.path(models_dir, "xgboost_model.json"))
   saveRDS(preprocessor, file.path(models_dir, "model_preprocessor.rds"))
   saveRDS(
     list(seed = seed, training_rows = training_indices, test_rows = test_indices),
@@ -543,8 +653,10 @@ run_model_training <- function(project_root = getwd()) {
   graphics::abline(0, 1, lty = 2, col = "grey60")
   model_colors <- c(
     Logistic = "#2166ac",
+    Logistic_WOE = "#8c6bb1",
     CART = "#b2182b",
-    RandomForest = "#606C38"
+    RandomForest = "#606C38",
+    XGBoost = "#C66B3D"
   )
   for (model_name in names(model_scores)) {
     curve <- roc_curves[roc_curves$model == model_name, , drop = FALSE]
@@ -675,6 +787,8 @@ run_model_training <- function(project_root = getwd()) {
       class_rate = format_percentage(class_rate),
       majority_to_minority_ratio = format_number(majority_to_minority_ratio, 2)
     )
+  woe_iv_by_variable_display <- woe_iv_by_variable |>
+    dplyr::mutate(information_value = format_number(information_value, 4))
   leakage_checks_display <- leakage_checks
   segment_diagnostics_display <- segment_diagnostics |>
     dplyr::mutate(
@@ -691,6 +805,8 @@ run_model_training <- function(project_root = getwd()) {
       false_positive_rate = format_percentage(false_positive_rate)
     )
   rf_metrics <- metrics[metrics$model == "RandomForest", , drop = FALSE]
+  woe_metrics <- metrics[metrics$model == "Logistic_WOE", , drop = FALSE]
+  xgb_metrics <- metrics[metrics$model == "XGBoost", , drop = FALSE]
   logistic_metrics <- metrics[metrics$model == "Logistic", , drop = FALSE]
   benchmark_interpretation <- paste0(
     "Random Forest has the strongest ROC-AUC (",
@@ -699,9 +815,17 @@ run_model_training <- function(project_root = getwd()) {
     format_number(rf_metrics$ks, 4),
     "), but its class-balanced training changes the score scale and produces poor probability calibration on the held-out test set (Brier score ",
     format_number(rf_metrics$brier_score, 4),
+    "). XGBoost reaches ROC-AUC ",
+    format_number(xgb_metrics$roc_auc, 4),
+    " with Brier score ",
+    format_number(xgb_metrics$brier_score, 4),
+    ". The WoE logistic candidate reaches ROC-AUC ",
+    format_number(woe_metrics$roc_auc, 4),
+    " and Brier score ",
+    format_number(woe_metrics$brier_score, 4),
     " versus ",
     format_number(logistic_metrics$brier_score, 4),
-    " for logistic regression). Logistic regression remains the preferred interpretable probability baseline for this demonstration; the Random Forest should not be used for policy decisions without probability calibration, validation, and governance."
+    " for the raw-feature logistic baseline. The WoE logistic candidate is the strongest interpretable demonstration candidate, while raw logistic remains the unbinned baseline. None of the tree ensembles should be used for policy decisions without calibration, validation, and governance."
   )
 
   report_lines <- c(
@@ -711,7 +835,7 @@ run_model_training <- function(project_root = getwd()) {
     "",
     "## Scope",
     "",
-    "This reproducible Phase 3 modeling slice compares a logistic-regression baseline, a CART decision tree, and a Random Forest benchmark. The Random Forest uses class-balanced bootstrap samples and fixed hyperparameters; it is a benchmark, not a tuned production model.",
+    "This reproducible Phase 3 modeling slice compares a raw-feature logistic baseline, a training-only WoE logistic candidate, CART, a class-balanced Random Forest benchmark, and a fixed XGBoost benchmark. The ensemble settings are deliberately fixed and are not a tuned production model.",
     "",
     "This is an educational demonstration, not a production lending model or lending-policy threshold.",
     "",
@@ -728,9 +852,15 @@ run_model_training <- function(project_root = getwd()) {
     "",
     "## Class imbalance",
     "",
-    "The target is imbalanced, so the Random Forest uses equal per-class bootstrap sample sizes based on the minority training count. Metrics remain reported on the untouched stratified test set.",
+    "The target is imbalanced, so the Random Forest uses equal per-class bootstrap sample sizes and XGBoost uses the training-set negative-to-positive ratio as `scale_pos_weight`. Metrics remain reported on the untouched stratified test set.",
     "",
     markdown_table(class_balance_display),
+    "",
+    "## WoE/IV screening",
+    "",
+    "WoE bins and Information Value are fit on the training partition only, with missing values retained as a separate bin. The WoE logistic candidate is evaluated on the same held-out test set; the summary is a screening aid, not evidence of causal importance. Variables with Information Value above 0.50 are strong signals and require additional leakage and temporal-availability review before any production use.",
+    "",
+    markdown_table(woe_iv_by_variable_display),
     "",
     "## Leakage checks",
     "",
@@ -787,18 +917,23 @@ run_model_training <- function(project_root = getwd()) {
     "- `reports/generated/leakage_checks.csv`",
     "- `reports/generated/segment_performance.csv`",
     "- `reports/generated/fairness_proxy.csv`",
+    "- `reports/generated/woe_iv_bins.csv`",
+    "- `reports/generated/woe_iv_summary.csv`",
     "- `reports/generated/roc_comparison.png`",
     "- `reports/generated/calibration_comparison.png`",
     "- `reports/generated/lift_by_decile.png`",
     "- `models/logistic_model.rds`",
     "- `models/cart_model.rds`",
     "- `models/random_forest_model.rds`",
+    "- `models/logistic_woe_model.rds`",
+    "- `models/woe_preprocessor.rds`",
+    "- `models/xgboost_model.json`",
     "- `models/model_preprocessor.rds`",
     "- `models/model_split.rds`",
     "",
     "## Next modeling work",
     "",
-    "Weight of Evidence/Information Value remains optional and should only be added if it improves the interpretable baseline under a validation design. A production fairness assessment requires protected-group definitions, governance, and representative data that are not present here. Model monitoring and resampling-based stability checks remain follow-up work."
+    "A production fairness assessment requires protected-group definitions, governance, and representative data that are not present here. Resampling-based stability checks, probability calibration, and model monitoring remain follow-up work."
   )
   writeLines(report_lines, report_path)
 

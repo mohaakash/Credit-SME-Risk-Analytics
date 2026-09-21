@@ -112,3 +112,120 @@ apply_model_preprocessor <- function(features, preprocessor) {
   }
   result
 }
+
+woe_source_variables <- function() {
+  c(
+    "age",
+    "revolving_utilization_of_unsecured_lines",
+    "debt_ratio",
+    "monthly_income",
+    "number_of_open_credit_lines_and_loans",
+    "number_of_time30_59days_past_due_not_worse",
+    "number_of_time60_89days_past_due_not_worse",
+    "number_of_times90days_late",
+    "number_real_estate_loans_or_lines",
+    "number_of_dependents"
+  )
+}
+
+woe_bin_values <- function(values, breaks) {
+  bins <- rep("Missing", length(values))
+  observed <- !is.na(values) & is.finite(values)
+  bins[observed] <- as.character(cut(
+    values[observed],
+    breaks = breaks,
+    include.lowest = TRUE,
+    right = TRUE
+  ))
+  bins
+}
+
+fit_woe_preprocessor <- function(data, target, variables = woe_source_variables(), max_bins = 5L) {
+  missing_columns <- setdiff(c(variables, "serious_dlqin2yrs"), names(data))
+  if (length(missing_columns) > 0) {
+    stop(
+      "WoE data is missing required columns: ",
+      paste(missing_columns, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  if (length(target) != nrow(data) || !all(target %in% c(0, 1))) {
+    stop("WoE target must align with data and contain only 0 and 1.", call. = FALSE)
+  }
+
+  mappings <- lapply(variables, function(variable) {
+    values <- data[[variable]]
+    finite_values <- values[!is.na(values) & is.finite(values)]
+    unique_values <- sort(unique(finite_values))
+    if (length(unique_values) < 2) {
+      breaks <- c(-Inf, Inf)
+    } else {
+      quantiles <- stats::quantile(
+        finite_values,
+        probs = seq(0, 1, length.out = max_bins + 1),
+        na.rm = TRUE,
+        names = FALSE,
+        type = 7
+      )
+      breaks <- unique(c(-Inf, quantiles[-c(1, length(quantiles))], Inf))
+    }
+    bins <- woe_bin_values(values, breaks)
+    levels <- sort(unique(bins))
+    good_count <- vapply(levels, function(level) sum(target[bins == level] == 0), integer(1))
+    bad_count <- vapply(levels, function(level) sum(target[bins == level] == 1), integer(1))
+    smoothing <- 0.5
+    good_distribution <- (good_count + smoothing) / (sum(good_count) + smoothing * length(levels))
+    bad_distribution <- (bad_count + smoothing) / (sum(bad_count) + smoothing * length(levels))
+    woe <- log(good_distribution / bad_distribution)
+    information_value <- (good_distribution - bad_distribution) * woe
+    list(
+      variable = variable,
+      breaks = breaks,
+      mapping = data.frame(
+        bin = levels,
+        good_count = good_count,
+        bad_count = bad_count,
+        good_distribution = good_distribution,
+        bad_distribution = bad_distribution,
+        woe = woe,
+        information_value = information_value,
+        stringsAsFactors = FALSE
+      )
+    )
+  })
+  names(mappings) <- variables
+  list(
+    variables = variables,
+    mappings = mappings,
+    max_bins = max_bins,
+    missing_treatment = "Missing values are retained as a separate WoE bin; bin boundaries are fit on the training partition only."
+  )
+}
+
+apply_woe_preprocessor <- function(data, preprocessor) {
+  result <- data.frame(row.names = seq_len(nrow(data)))
+  for (variable in preprocessor$variables) {
+    mapping <- preprocessor$mappings[[variable]]$mapping
+    bins <- woe_bin_values(data[[variable]], preprocessor$mappings[[variable]]$breaks)
+    lookup <- stats::setNames(mapping$woe, mapping$bin)
+    values <- unname(lookup[bins])
+    values[is.na(values)] <- 0
+    result[[paste0("woe_", variable)]] <- as.numeric(values)
+  }
+  result
+}
+
+woe_iv_summary <- function(preprocessor) {
+  dplyr::bind_rows(lapply(preprocessor$mappings, function(item) {
+    mapping <- item$mapping
+    data.frame(
+      variable = item$variable,
+      bin = mapping$bin,
+      good_count = mapping$good_count,
+      bad_count = mapping$bad_count,
+      woe = mapping$woe,
+      information_value = mapping$information_value,
+      stringsAsFactors = FALSE
+    )
+  }))
+}

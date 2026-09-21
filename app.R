@@ -143,6 +143,14 @@ pretty_feature_labels <- c(
   debt_ratio_gt_10 = "Debt ratio above 10"
 )
 
+model_display_labels <- c(
+  Logistic = "Logistic",
+  Logistic_WOE = "Logistic (WoE)",
+  CART = "CART",
+  RandomForest = "Random Forest",
+  XGBoost = "XGBoost"
+)
+
 format_number <- function(value, digits = 0) {
   ifelse(
     is.na(value),
@@ -514,7 +522,7 @@ ui <- shiny::tagList(
       page_intro(
         "Credit-scoring model",
         "Rank risk, inspect the trade-offs.",
-        "The saved logistic baseline is compared with CART and a class-balanced Random Forest benchmark on the same held-out test set. Metrics are demonstrations, not validated lending-policy thresholds."
+        "The saved logistic baseline is compared with a WoE logistic candidate, CART, a class-balanced Random Forest benchmark, and XGBoost on the same held-out test set. Metrics are demonstrations, not validated lending-policy thresholds."
       ),
       div(class = "panel", h3("Held-out model comparison"), div(class = "panel-caption", "ROC-AUC and PR-AUC reward ranking quality; Brier score rewards probability accuracy."), tableOutput("model_metrics_table")),
       fluidRow(
@@ -523,7 +531,7 @@ ui <- shiny::tagList(
       ),
       div(class = "panel", h3("Lift by risk decile"), div(class = "panel-caption", "Decile 1 contains the highest predicted-risk borrowers."), plotOutput("model_lift_plot", height = "360px")),
       div(class = "panel", h3("Demonstration threshold trade-offs"), div(class = "panel-caption", "No threshold is selected as real lending policy."), tableOutput("model_threshold_table")),
-      div(class = "notice", strong("Model boundary: "), "The current comparison is logistic regression, CART, and Random Forest. The Random Forest is a fixed benchmark with poor probability calibration after class-balanced sampling; it is not a production model.")
+      div(class = "notice", strong("Model boundary: "), "The current comparison includes raw logistic, WoE logistic, CART, Random Forest, and XGBoost. The class-weighted ensembles have poor probability calibration and are not production models.")
     ),
     tabPanel(
       "Risk simulator",
@@ -787,6 +795,7 @@ server <- function(input, output, session) {
   output$model_metrics_table <- renderTable({
     model_metrics |>
       dplyr::mutate(
+        model = unname(model_display_labels[model]),
         default_rate = format_percentage(default_rate),
         roc_auc = format_number(roc_auc, 3),
         pr_auc = format_number(pr_auc, 3),
@@ -807,7 +816,7 @@ server <- function(input, output, session) {
 
   output$model_roc <- renderPlot({
     plot_theme()
-    colors <- c(Logistic = "#2166ac", CART = "#C66B3D", RandomForest = "#606C38")
+    colors <- c(Logistic = "#2166ac", Logistic_WOE = "#8c6bb1", CART = "#b2182b", RandomForest = "#606C38", XGBoost = "#C66B3D")
     graphics::plot(
       0,
       0,
@@ -829,7 +838,7 @@ server <- function(input, output, session) {
     }
     graphics::abline(0, 1, lty = 2, col = "#8B9D83")
     legend_labels <- paste0(
-      model_metrics$model,
+      unname(model_display_labels[model_metrics$model]),
       " ROC-AUC = ",
       format_number(model_metrics$roc_auc, 3)
     )
@@ -846,24 +855,24 @@ server <- function(input, output, session) {
     plot_theme()
     graphics::plot(0, 0, type = "n", xlim = c(0, max(model_calibration$predicted_default_rate) * 1.05), ylim = c(0, max(model_calibration$observed_default_rate) * 1.05), xlab = "Mean predicted default rate", ylab = "Observed default rate", main = "Calibration by risk decile")
     graphics::abline(0, 1, lty = 2, col = "#8B9D83")
-    colors <- c(Logistic = "#2166ac", CART = "#C66B3D", RandomForest = "#606C38")
+    colors <- c(Logistic = "#2166ac", Logistic_WOE = "#8c6bb1", CART = "#b2182b", RandomForest = "#606C38", XGBoost = "#C66B3D")
     for (model_name in unique(model_calibration$model)) {
       values <- model_calibration[model_calibration$model == model_name, , drop = FALSE]
       graphics::lines(values$predicted_default_rate, values$observed_default_rate, type = "b", col = colors[[model_name]], lwd = 2, pch = 19)
     }
-    graphics::legend("topleft", legend = names(colors), col = colors, lwd = 2, pch = 19, bty = "n")
+    graphics::legend("topleft", legend = unname(model_display_labels[names(colors)]), col = colors, lwd = 2, pch = 19, bty = "n")
   }, res = 110)
 
   output$model_lift_plot <- renderPlot({
     plot_theme()
-    colors <- c(Logistic = "#2166ac", CART = "#C66B3D", RandomForest = "#606C38")
+    colors <- c(Logistic = "#2166ac", Logistic_WOE = "#8c6bb1", CART = "#b2182b", RandomForest = "#606C38", XGBoost = "#C66B3D")
     graphics::plot(1:10, rep(NA_real_, 10), type = "n", xlim = c(1, 10), ylim = c(0, max(model_lift$lift) * 1.05), xlab = "Risk decile (1 = highest predicted risk)", ylab = "Observed lift", main = "Lift by risk decile")
     graphics::abline(h = 1, lty = 2, col = "#8B9D83")
     for (model_name in unique(model_lift$model)) {
       values <- model_lift[model_lift$model == model_name, , drop = FALSE]
       graphics::lines(values$decile, values$lift, type = "b", col = colors[[model_name]], lwd = 2, pch = 19)
     }
-    graphics::legend("topright", legend = names(colors), col = colors, lwd = 2, pch = 19, bty = "n")
+    graphics::legend("topright", legend = unname(model_display_labels[names(colors)]), col = colors, lwd = 2, pch = 19, bty = "n")
   }, res = 110)
 
   output$model_threshold_table <- renderTable({
