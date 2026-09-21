@@ -15,6 +15,7 @@
 - `renv` is initialized with a lockfile for the first data-preparation slice.
 - The first cleaning run produced a validation report and SQLite database locally; generated data artifacts remain Git-ignored.
 - Phase 2 statistical analysis now produces descriptive comparisons, confidence intervals, segment rates, chi-square tests, correlations, plots, and a preliminary logistic interpretation report.
+- Phase 3 has a leakage-safe stratified split, logistic baseline, CART benchmark, held-out metrics, threshold trade-offs, calibration, lift, and saved local model objects. Random Forest/XGBoost remains pending because the current environment cannot retrieve the package source.
 
 Raw files are intentionally ignored by Git. The source URL, file names, and checksums must remain documented so the data can be restored reproducibly.
 
@@ -97,15 +98,16 @@ The application-funnel page, application dates, processing times, industry, geog
 
 ### Tasks
 
-- [ ] Create `R/feature_engineering.R`.
-- [ ] Use a stratified split because this dataset does not provide a usable application date.
-- [ ] Establish logistic regression as the baseline.
+- [x] Create `R/feature_engineering.R`.
+- [x] Use a stratified split because this dataset does not provide a usable application date.
+- [x] Establish logistic regression as the baseline.
 - [ ] Add binning/Weight of Evidence/Information Value only where it improves interpretability and is validated.
-- [ ] Train one tree-based comparison model: Random Forest or XGBoost.
-- [ ] Create `R/train_models.R` with fixed seeds and saved preprocessing.
-- [ ] Evaluate ROC-AUC, PR-AUC, KS, lift by risk decile, Brier score, calibration, and threshold metrics.
-- [ ] Select demonstration thresholds using explicit false-negative/false-positive trade-offs.
-- [ ] Save model objects and evaluation summaries under `models/` and `reports/generated/`.
+- [x] Train a first CART tree-based comparison model as a runnable benchmark.
+- [ ] Add a Random Forest or XGBoost comparison when the package source is available.
+- [x] Create `R/train_models.R` with fixed seeds and saved preprocessing.
+- [x] Evaluate ROC-AUC, PR-AUC, KS, lift by risk decile, Brier score, calibration, and threshold metrics.
+- [x] Produce demonstration threshold trade-offs with explicit false-negative/false-positive metrics; do not select a lending-policy threshold.
+- [x] Save model objects and evaluation summaries under `models/` and `reports/generated/`.
 - [ ] Check for leakage, class imbalance, unstable segments, and possible fairness concerns.
 
 ### Acceptance criteria

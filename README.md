@@ -4,7 +4,7 @@ An R and Shiny project for exploring credit-risk patterns, comparing default-ris
 
 ## Project status
 
-The repository is initialized, `renv` is configured, and the reproducible data-cleaning and statistical-analysis pipelines are complete. They validate the Kaggle training file, write a cleaned CSV and SQLite database locally, and generate data-quality and statistical-analysis reports. Modeling and the Shiny application remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
+The repository is initialized, `renv` is configured, and the reproducible data-cleaning, statistical-analysis, and first modeling pipelines are available. They validate the Kaggle training file, write a cleaned CSV and SQLite database locally, and generate analysis and model-evaluation reports. A Random Forest/XGBoost comparison and the Shiny application remain planned work. See the [task plan](docs/task-plan.md) for the development sequence and acceptance criteria.
 
 ## Dataset
 
@@ -77,9 +77,10 @@ Rscript -e 'install.packages("renv", repos = "https://cloud.r-project.org")'
 Rscript -e 'renv::restore(prompt = FALSE)'
 Rscript R/data_cleaning.R
 Rscript R/statistical_analysis.R
+Rscript R/train_models.R
 ```
 
-The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/` and `reports/generated/`. The tracked summaries are [reports/data-quality-report.md](reports/data-quality-report.md) and [reports/statistical-analysis-report.md](reports/statistical-analysis-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
+The pipeline expects the raw files in `data/raw/` and produces ignored local artifacts under `data/processed/`, `models/`, and `reports/generated/`. The tracked summaries are [reports/data-quality-report.md](reports/data-quality-report.md), [reports/statistical-analysis-report.md](reports/statistical-analysis-report.md), and [reports/modeling-report.md](reports/modeling-report.md). Initial KPI queries are in [sql/kpi_queries.sql](sql/kpi_queries.sql).
 
 ## Responsible use
 

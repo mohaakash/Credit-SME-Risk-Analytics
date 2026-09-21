@@ -1,0 +1,568 @@
+# Train and evaluate the Phase 3 demonstration credit-risk models.
+
+suppressPackageStartupMessages({
+  library(DBI)
+  library(RSQLite)
+  library(dplyr)
+  library(readr)
+  library(rpart)
+})
+
+source(file.path("R", "feature_engineering.R"))
+
+safe_divide <- function(numerator, denominator) {
+  ifelse(denominator == 0, NA_real_, numerator / denominator)
+}
+
+stratified_split <- function(target, training_fraction = 0.8, seed = 20260921) {
+  if (!all(target %in% c(0, 1))) {
+    stop("Target must contain only 0 and 1 values.", call. = FALSE)
+  }
+
+  set.seed(seed)
+  training_indices <- unlist(lapply(c(0, 1), function(class_value) {
+    class_indices <- which(target == class_value)
+    sample_size <- floor(length(class_indices) * training_fraction)
+    sample(class_indices, size = sample_size, replace = FALSE)
+  }))
+  sort(training_indices)
+}
+
+roc_auc <- function(target, score) {
+  positive_count <- sum(target == 1)
+  negative_count <- sum(target == 0)
+  if (positive_count == 0 || negative_count == 0) return(NA_real_)
+
+  ranks <- rank(score, ties.method = "average")
+  (sum(ranks[target == 1]) - positive_count * (positive_count + 1) / 2) /
+    (positive_count * negative_count)
+}
+
+average_precision <- function(target, score) {
+  positive_count <- sum(target == 1)
+  if (positive_count == 0) return(NA_real_)
+
+  ordering <- order(score, decreasing = TRUE)
+  ordered_target <- target[ordering]
+  precision <- cumsum(ordered_target) / seq_along(ordered_target)
+  sum(precision[ordered_target == 1]) / positive_count
+}
+
+ks_statistic <- function(target, score) {
+  positive_count <- sum(target == 1)
+  negative_count <- sum(target == 0)
+  if (positive_count == 0 || negative_count == 0) {
+    return(c(ks = NA_real_, threshold = NA_real_))
+  }
+
+  ordering <- order(score, decreasing = TRUE)
+  ordered_target <- target[ordering]
+  true_positive_rate <- cumsum(ordered_target) / positive_count
+  false_positive_rate <- cumsum(1 - ordered_target) / negative_count
+  difference <- true_positive_rate - false_positive_rate
+  position <- which.max(abs(difference))
+  c(ks = abs(difference[position]), threshold = score[ordering][position])
+}
+
+roc_curve <- function(target, score) {
+  ordering <- order(score, decreasing = TRUE)
+  ordered_target <- target[ordering]
+  positive_count <- sum(target == 1)
+  negative_count <- sum(target == 0)
+  data.frame(
+    false_positive_rate = c(0, cumsum(1 - ordered_target) / negative_count),
+    true_positive_rate = c(0, cumsum(ordered_target) / positive_count)
+  )
+}
+
+calibration_table <- function(model_name, target, score) {
+  ordering <- order(-score, seq_along(score))
+  rank_descending <- match(seq_along(score), ordering)
+  decile <- pmin(10L, ceiling(rank_descending / (length(score) / 10)))
+  tibble::tibble(
+    model = model_name,
+    decile = decile,
+    target = target,
+    score = score
+  ) |>
+    dplyr::group_by(model, decile) |>
+    dplyr::summarise(
+      borrower_count = dplyr::n(),
+      predicted_default_rate = mean(score),
+      observed_default_rate = mean(target),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(model, decile)
+}
+
+threshold_table <- function(model_name, target, score, thresholds) {
+  dplyr::bind_rows(lapply(thresholds, function(threshold) {
+    predicted_positive <- score >= threshold
+    true_positive <- sum(predicted_positive & target == 1)
+    false_positive <- sum(predicted_positive & target == 0)
+    true_negative <- sum(!predicted_positive & target == 0)
+    false_negative <- sum(!predicted_positive & target == 1)
+    tibble::tibble(
+      model = model_name,
+      threshold = threshold,
+      true_positive = true_positive,
+      false_positive = false_positive,
+      true_negative = true_negative,
+      false_negative = false_negative,
+      sensitivity = safe_divide(true_positive, true_positive + false_negative),
+      specificity = safe_divide(true_negative, true_negative + false_positive),
+      precision = safe_divide(true_positive, true_positive + false_positive),
+      false_positive_rate = safe_divide(false_positive, false_positive + true_negative),
+      false_negative_rate = safe_divide(false_negative, false_negative + true_positive),
+      flagged_rate = mean(predicted_positive)
+    )
+  }))
+}
+
+lift_table <- function(model_name, target, score) {
+  ordering <- order(-score, seq_along(score))
+  rank_descending <- match(seq_along(score), ordering)
+  decile <- pmin(10L, ceiling(rank_descending / (length(score) / 10)))
+  overall_rate <- mean(target)
+  tibble::tibble(
+    model = model_name,
+    decile = decile,
+    target = target,
+    score = score
+  ) |>
+    dplyr::group_by(model, decile) |>
+    dplyr::summarise(
+      borrower_count = dplyr::n(),
+      predicted_default_rate = mean(score),
+      observed_default_rate = mean(target),
+      lift = observed_default_rate / overall_rate,
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(model, decile) |>
+    dplyr::mutate(cumulative_borrower_pct = cumsum(borrower_count) / sum(borrower_count))
+}
+
+model_metrics <- function(model_name, target, score) {
+  ks_result <- ks_statistic(target, score)
+  tibble::tibble(
+    model = model_name,
+    borrower_count = length(target),
+    default_rate = mean(target),
+    roc_auc = roc_auc(target, score),
+    pr_auc = average_precision(target, score),
+    ks = unname(ks_result[["ks"]]),
+    ks_threshold = unname(ks_result[["threshold"]]),
+    brier_score = mean((score - target)^2)
+  )
+}
+
+markdown_table <- function(data) {
+  if (nrow(data) == 0) return(c("No rows."))
+  header <- paste0("| ", paste(names(data), collapse = " | "), " |")
+  divider <- paste0("| ", paste(rep("---", ncol(data)), collapse = " | "), " |")
+  rows <- apply(data, 1, function(row) paste0("| ", paste(row, collapse = " | "), " |"))
+  c(header, divider, rows)
+}
+
+format_number <- function(values, digits = 4) {
+  ifelse(is.na(values), "NA", formatC(values, format = "f", digits = digits, big.mark = ","))
+}
+
+format_percentage <- function(values, digits = 2) {
+  ifelse(is.na(values), "NA", paste0(formatC(values * 100, format = "f", digits = digits), "%"))
+}
+
+format_p_value <- function(values) {
+  ifelse(
+    is.na(values),
+    "NA",
+    ifelse(values < 1e-6, "<1e-6", formatC(values, format = "f", digits = 6))
+  )
+}
+
+run_model_training <- function(project_root = getwd()) {
+  sqlite_path <- file.path(
+    project_root,
+    "data",
+    "processed",
+    "give_me_some_credit.sqlite"
+  )
+  generated_dir <- file.path(project_root, "reports", "generated")
+  models_dir <- file.path(project_root, "models")
+  report_path <- file.path(project_root, "reports", "modeling-report.md")
+
+  if (!file.exists(sqlite_path)) {
+    stop("Clean SQLite database not found. Run R/data_cleaning.R first.", call. = FALSE)
+  }
+  dir.create(generated_dir, recursive = TRUE, showWarnings = FALSE)
+  dir.create(models_dir, recursive = TRUE, showWarnings = FALSE)
+
+  connection <- DBI::dbConnect(RSQLite::SQLite(), sqlite_path)
+  on.exit(DBI::dbDisconnect(connection), add = TRUE)
+  cleaned <- DBI::dbReadTable(connection, "training_clean")
+  target <- as.integer(cleaned$serious_dlqin2yrs)
+  valid_rows <- !is.na(target) & target %in% c(0, 1)
+  cleaned <- cleaned[valid_rows, , drop = FALSE]
+  target <- target[valid_rows]
+
+  seed <- 20260921
+  training_indices <- stratified_split(target, training_fraction = 0.8, seed = seed)
+  test_indices <- setdiff(seq_along(target), training_indices)
+  split <- rep("test", length(target))
+  split[training_indices] <- "train"
+
+  model_features <- build_model_features(cleaned)
+  preprocessor <- fit_model_preprocessor(model_features[training_indices, , drop = FALSE])
+  training_features <- apply_model_preprocessor(
+    model_features[training_indices, , drop = FALSE],
+    preprocessor
+  )
+  test_features <- apply_model_preprocessor(
+    model_features[test_indices, , drop = FALSE],
+    preprocessor
+  )
+  training_target <- target[training_indices]
+  test_target <- target[test_indices]
+
+  formula <- stats::as.formula(
+    paste("target ~", paste(preprocessor$feature_names, collapse = " + "))
+  )
+  logistic_training_data <- training_features
+  logistic_training_data$target <- training_target
+  logistic_model <- stats::glm(
+    formula,
+    data = logistic_training_data,
+    family = stats::binomial()
+  )
+  logistic_score <- as.numeric(stats::predict(
+    logistic_model,
+    newdata = test_features,
+    type = "response"
+  ))
+
+  tree_training_data <- training_features
+  tree_training_data$target <- factor(training_target, levels = c(0, 1))
+  tree_model <- rpart::rpart(
+    formula,
+    data = tree_training_data,
+    method = "class",
+    control = rpart::rpart.control(
+      cp = 0.001,
+      minsplit = 200,
+      maxdepth = 6,
+      xval = 5
+    )
+  )
+  tree_probabilities <- stats::predict(tree_model, newdata = test_features, type = "prob")
+  tree_score <- as.numeric(tree_probabilities[, "1"])
+
+  model_scores <- list(
+    Logistic = logistic_score,
+    CART = tree_score
+  )
+  metrics <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
+    model_metrics(model_name, test_target, model_scores[[model_name]])
+  }))
+  thresholds <- c(0.03, 0.05, 0.10, 0.20)
+  threshold_metrics <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
+    threshold_table(model_name, test_target, model_scores[[model_name]], thresholds)
+  }))
+  calibration <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
+    calibration_table(model_name, test_target, model_scores[[model_name]])
+  }))
+  lift <- dplyr::bind_rows(lapply(names(model_scores), function(model_name) {
+    lift_table(model_name, test_target, model_scores[[model_name]])
+  }))
+
+  logistic_coefficients <- as.data.frame(summary(logistic_model)$coefficients)
+  logistic_coefficients$feature <- rownames(logistic_coefficients)
+  rownames(logistic_coefficients) <- NULL
+  names(logistic_coefficients)[1:4] <- c("estimate", "std_error", "z_value", "p_value")
+  logistic_importance <- logistic_coefficients |>
+    dplyr::filter(feature != "(Intercept)") |>
+    dplyr::transmute(
+      model = "Logistic",
+      feature = feature,
+      importance = abs(estimate),
+      estimate = estimate,
+      odds_ratio = exp(estimate),
+      p_value = p_value
+    ) |>
+    dplyr::arrange(dplyr::desc(importance))
+  tree_importance_values <- tree_model$variable.importance
+  tree_importance <- if (is.null(tree_importance_values)) {
+    tibble::tibble(
+      model = "CART",
+      feature = character(),
+      importance = numeric(),
+      estimate = numeric(),
+      odds_ratio = numeric(),
+      p_value = numeric()
+    )
+  } else {
+    tibble::tibble(
+      model = "CART",
+      feature = names(tree_importance_values),
+      importance = as.numeric(tree_importance_values),
+      estimate = NA_real_,
+      odds_ratio = NA_real_,
+      p_value = NA_real_
+    ) |>
+      dplyr::arrange(dplyr::desc(importance))
+  }
+  importance <- dplyr::bind_rows(logistic_importance, tree_importance)
+
+  split_manifest <- tibble::tibble(
+    row_number = seq_along(target),
+    source_id = cleaned$id,
+    split = split,
+    target = target
+  )
+
+  readr::write_csv(metrics, file.path(generated_dir, "model_metrics.csv"))
+  readr::write_csv(threshold_metrics, file.path(generated_dir, "model_threshold_metrics.csv"))
+  readr::write_csv(calibration, file.path(generated_dir, "model_calibration.csv"))
+  readr::write_csv(lift, file.path(generated_dir, "model_lift_by_decile.csv"))
+  readr::write_csv(importance, file.path(generated_dir, "model_feature_importance.csv"))
+  readr::write_csv(split_manifest, file.path(generated_dir, "model_split_manifest.csv"))
+
+  saveRDS(logistic_model, file.path(models_dir, "logistic_model.rds"))
+  saveRDS(tree_model, file.path(models_dir, "cart_model.rds"))
+  saveRDS(preprocessor, file.path(models_dir, "model_preprocessor.rds"))
+  saveRDS(
+    list(seed = seed, training_rows = training_indices, test_rows = test_indices),
+    file.path(models_dir, "model_split.rds")
+  )
+
+  roc_curves <- lapply(names(model_scores), function(model_name) {
+    curve <- roc_curve(test_target, model_scores[[model_name]])
+    curve$model <- model_name
+    curve
+  }) |>
+    dplyr::bind_rows()
+  grDevices::png(
+    file.path(generated_dir, "roc_comparison.png"),
+    width = 1200,
+    height = 900,
+    res = 120
+  )
+  graphics::plot(
+    0,
+    0,
+    type = "n",
+    xlim = c(0, 1),
+    ylim = c(0, 1),
+    xlab = "False-positive rate",
+    ylab = "True-positive rate",
+    main = paste0("ROC comparison (test n = ", formatC(length(test_target), format = "d", big.mark = ","), ")")
+  )
+  graphics::abline(0, 1, lty = 2, col = "grey60")
+  model_colors <- c(Logistic = "#2166ac", CART = "#b2182b")
+  for (model_name in names(model_scores)) {
+    curve <- roc_curves[roc_curves$model == model_name, , drop = FALSE]
+    graphics::lines(
+      curve$false_positive_rate,
+      curve$true_positive_rate,
+      col = model_colors[[model_name]],
+      lwd = 2
+    )
+  }
+  graphics::legend(
+    "bottomright",
+    legend = paste0(metrics$model, " AUC=", formatC(metrics$roc_auc, format = "f", digits = 3)),
+    col = model_colors[metrics$model],
+    lwd = 2,
+    bty = "n"
+  )
+  grDevices::dev.off()
+
+  grDevices::png(
+    file.path(generated_dir, "calibration_comparison.png"),
+    width = 1200,
+    height = 900,
+    res = 120
+  )
+  graphics::plot(
+    0,
+    0,
+    type = "n",
+    xlim = c(0, max(calibration$predicted_default_rate) * 1.05),
+    ylim = c(0, max(calibration$observed_default_rate) * 1.05),
+    xlab = "Mean predicted default rate",
+    ylab = "Observed default rate",
+    main = "Calibration by descending-risk decile"
+  )
+  graphics::abline(0, 1, lty = 2, col = "grey60")
+  for (model_name in names(model_scores)) {
+    values <- calibration[calibration$model == model_name, , drop = FALSE]
+    graphics::lines(
+      values$predicted_default_rate,
+      values$observed_default_rate,
+      type = "b",
+      col = model_colors[[model_name]],
+      lwd = 2,
+      pch = 19
+    )
+  }
+  graphics::legend(
+    "topleft",
+    legend = names(model_scores),
+    col = model_colors[names(model_scores)],
+    lwd = 2,
+    pch = 19,
+    bty = "n"
+  )
+  grDevices::dev.off()
+
+  grDevices::png(
+    file.path(generated_dir, "lift_by_decile.png"),
+    width = 1200,
+    height = 900,
+    res = 120
+  )
+  graphics::plot(
+    1:10,
+    rep(NA_real_, 10),
+    type = "n",
+    xlim = c(1, 10),
+    ylim = c(0, max(lift$lift) * 1.05),
+    xlab = "Risk decile (1 = highest predicted risk)",
+    ylab = "Observed lift vs. portfolio default rate",
+    main = "Test-set lift by risk decile"
+  )
+  graphics::abline(h = 1, lty = 2, col = "grey60")
+  for (model_name in names(model_scores)) {
+    values <- lift[lift$model == model_name, , drop = FALSE]
+    graphics::lines(values$decile, values$lift, type = "b", col = model_colors[[model_name]], lwd = 2, pch = 19)
+  }
+  graphics::legend(
+    "topright",
+    legend = names(model_scores),
+    col = model_colors[names(model_scores)],
+    lwd = 2,
+    pch = 19,
+    bty = "n"
+  )
+  grDevices::dev.off()
+
+  metrics_display <- metrics |>
+    dplyr::mutate(
+      default_rate = format_percentage(default_rate),
+      roc_auc = format_number(roc_auc, 4),
+      pr_auc = format_number(pr_auc, 4),
+      ks = format_number(ks, 4),
+      ks_threshold = format_number(ks_threshold, 4),
+      brier_score = format_number(brier_score, 4)
+    )
+  threshold_display <- threshold_metrics |>
+    dplyr::mutate(
+      threshold = format_percentage(threshold),
+      sensitivity = format_percentage(sensitivity),
+      specificity = format_percentage(specificity),
+      precision = format_percentage(precision),
+      false_positive_rate = format_percentage(false_positive_rate),
+      false_negative_rate = format_percentage(false_negative_rate),
+      flagged_rate = format_percentage(flagged_rate)
+    ) |>
+    dplyr::select(model, threshold, sensitivity, specificity, precision, false_positive_rate, false_negative_rate, flagged_rate)
+  calibration_display <- calibration |>
+    dplyr::filter(decile %in% c(1, 5, 10)) |>
+    dplyr::mutate(
+      predicted_default_rate = format_percentage(predicted_default_rate),
+      observed_default_rate = format_percentage(observed_default_rate)
+    )
+  importance_display <- importance |>
+    dplyr::group_by(model) |>
+    dplyr::slice_head(n = 6) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(
+      importance = format_number(importance),
+      odds_ratio = format_number(odds_ratio),
+      p_value = format_p_value(p_value)
+    ) |>
+    dplyr::select(model, feature, importance, odds_ratio, p_value)
+
+  train_counts <- table(training_target)
+  test_counts <- table(test_target)
+  report_lines <- c(
+    "# Modeling report",
+    "",
+    "Generated by `R/train_models.R` from the current cleaned SQLite input.",
+    "",
+    "## Scope",
+    "",
+    "This is the first reproducible Phase 3 modeling slice. It compares a logistic-regression baseline with a single CART decision tree. Random Forest/XGBoost is intentionally deferred because the current environment cannot retrieve the required package from CRAN; CART provides a runnable tree-based benchmark without changing the data contract.",
+    "",
+    "This is an educational demonstration, not a production lending model or lending-policy threshold.",
+    "",
+    "## Split and preprocessing",
+    "",
+    paste0("- Fixed split seed: `", seed, "`"),
+    paste0("- Training rows: ", formatC(length(training_target), format = "d", big.mark = ","), " (defaults: ", formatC(train_counts[["1"]], format = "d", big.mark = ","), ")"),
+    paste0("- Test rows: ", formatC(length(test_target), format = "d", big.mark = ","), " (defaults: ", formatC(test_counts[["1"]], format = "d", big.mark = ","), ")"),
+    "- The split is stratified on `serious_dlqin2yrs`.",
+    "- Missing numeric values are imputed with medians computed from the training partition only.",
+    "- Missingness indicators and source quality flags are retained as model features.",
+    "- Ratios and monthly income use `log1p` transforms; extreme observations are not silently removed.",
+    "- No test labels or post-target fields are used as predictors.",
+    "",
+    "## Held-out test metrics",
+    "",
+    markdown_table(metrics_display),
+    "",
+    "ROC-AUC measures ranking discrimination; PR-AUC is useful under class imbalance; KS is the maximum separation between cumulative default and non-default distributions; Brier score measures probability error, where lower is better.",
+    "",
+    "## Demonstration threshold trade-offs",
+    "",
+    "These thresholds are displayed to make false-positive and false-negative trade-offs explicit. No threshold is selected as lending policy.",
+    "",
+    markdown_table(threshold_display),
+    "",
+    "## Calibration and lift",
+    "",
+    "Risk decile 1 contains the highest predicted-risk observations. The full calibration and lift tables are saved under `reports/generated/`; selected deciles are shown below.",
+    "",
+    markdown_table(calibration_display),
+    "",
+    "## Feature interpretation",
+    "",
+    "Logistic odds ratios are conditional associations for the transformed feature terms. CART importance is a split-improvement measure and is not a causal contribution or a stable policy weight.",
+    "",
+    markdown_table(importance_display),
+    "",
+    "## Generated artifacts",
+    "",
+    "- `reports/generated/model_metrics.csv`",
+    "- `reports/generated/model_threshold_metrics.csv`",
+    "- `reports/generated/model_calibration.csv`",
+    "- `reports/generated/model_lift_by_decile.csv`",
+    "- `reports/generated/model_feature_importance.csv`",
+    "- `reports/generated/model_split_manifest.csv`",
+    "- `reports/generated/roc_comparison.png`",
+    "- `reports/generated/calibration_comparison.png`",
+    "- `reports/generated/lift_by_decile.png`",
+    "- `models/logistic_model.rds`",
+    "- `models/cart_model.rds`",
+    "- `models/model_preprocessor.rds`",
+    "- `models/model_split.rds`",
+    "",
+    "## Next modeling work",
+    "",
+    "Before the dashboard, add a Random Forest or XGBoost comparison when the package source is available, validate hyperparameters without touching the test set, and review calibration and threshold stability across resamples."
+  )
+  writeLines(report_lines, report_path)
+
+  message(paste0("Modeling report written to ", report_path))
+  message(paste0("Test metrics generated for ", length(model_scores), " models"))
+
+  invisible(list(
+    metrics = metrics,
+    threshold_metrics = threshold_metrics,
+    calibration = calibration,
+    lift = lift,
+    importance = importance,
+    report_path = report_path
+  ))
+}
+
+run_model_training()
