@@ -12,6 +12,9 @@ screenshots/*
 !reports/generated/.gitkeep
 !screenshots/.gitkeep
 !screenshots/dashboard-overview.png
+!screenshots/monitoring-dashboard.png
+!screenshots/risk-simulator.png
+!screenshots/model-evaluation.png
 !screenshots/phase-5-monitoring-dashboard.jpg
 !screenshots/phase-5-model-evaluation-dashboard.jpg
 

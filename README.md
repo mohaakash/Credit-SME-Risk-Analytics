@@ -202,11 +202,21 @@ If startup reports missing artifacts, rerun the complete pipeline in the order s
 
 ## Dashboard captures
 
+### Dashboard overview
+
 ![Dashboard overview](screenshots/dashboard-overview.png)
 
-![Phase 5 monitoring page](screenshots/phase-5-monitoring-dashboard.jpg)
+### Model monitoring
 
-![Model evaluation page](screenshots/phase-5-model-evaluation-dashboard.jpg)
+![Model monitoring dashboard](screenshots/monitoring-dashboard.png)
+
+### Risk simulator
+
+![Risk simulator dashboard](screenshots/risk-simulator.png)
+
+### Credit model evaluation
+
+![Credit model evaluation dashboard](screenshots/model-evaluation.png)
 
 ## Business findings
 
