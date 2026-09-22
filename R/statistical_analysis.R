@@ -264,11 +264,13 @@ run_statistical_analysis <- function(project_root = getwd()) {
     labels = c("<=0.25", "0.25-0.50", "0.50-1.00", "1.00-2.00", ">2.00"),
     right = TRUE
   )
-  debt_ratio_band <- cut(
-    data$debt_ratio,
-    breaks = c(-Inf, 0.2, 0.5, 1, 10, Inf),
-    labels = c("<=0.20", "0.20-0.50", "0.50-1.00", "1.00-10.00", ">10.00"),
-    right = TRUE
+  debt_ratio_band <- dplyr::case_when(
+    is.na(data$monthly_income) ~ "Missing income",
+    data$debt_ratio <= 0.2 ~ "<=0.20",
+    data$debt_ratio <= 0.5 ~ "0.20-0.50",
+    data$debt_ratio <= 1.0 ~ "0.50-1.00",
+    data$debt_ratio <= 10.0 ~ "1.00-10.00",
+    TRUE ~ ">10.00"
   )
   income_band <- dplyr::case_when(
     is.na(data$monthly_income) ~ "Missing",
@@ -370,7 +372,7 @@ run_statistical_analysis <- function(project_root = getwd()) {
       data$revolving_utilization_of_unsecured_lines,
       0
     )),
-    log_debt_ratio = log1p(pmax(data$debt_ratio, 0)),
+    log_debt_ratio = log1p(pmin(pmax(data$debt_ratio, 0), 10)),
     log_monthly_income = log1p(pmax(data$monthly_income, 0)),
     open_credit_lines = data$number_of_open_credit_lines_and_loans,
     times_30_59 = data$number_of_time30_59days_past_due_not_worse,

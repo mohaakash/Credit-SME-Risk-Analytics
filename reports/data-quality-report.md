@@ -13,7 +13,7 @@ This report covers the Kaggle Give Me Some Credit training file. It is generated
 | Source rows | 150000 |
 | Source columns | 12 |
 | Cleaned rows | 150000 |
-| Cleaned columns | 24 |
+| Cleaned columns | 29 |
 | Duplicate IDs | 0 |
 | Invalid target rows | 0 |
 | Rows with any quality flag | 34723 |

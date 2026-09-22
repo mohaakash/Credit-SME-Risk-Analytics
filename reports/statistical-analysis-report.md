@@ -71,7 +71,7 @@ Each test checks whether the binned segment and the binary target are independen
 | --- | --- | --- | --- | --- | --- |
 | age_band | 1,856.6736 | 3 | <1e-6 | 589.5327 | None |
 | utilization_band | 12,789.7982 | 4 | <1e-6 | 24.7976 | None |
-| debt_ratio_band | 635.4423 | 4 | <1e-6 | 418.4184 | None |
+| debt_ratio_band | 786.3410 | 5 | <1e-6 | 140.7650 | None |
 | income_band | 617.8025 | 4 | <1e-6 | 802.2805 | None |
 | dependents_band | 329.1780 | 3 | <1e-6 | 262.2802 | None |
 | open_lines_band | 478.1678 | 3 | <1e-6 | 344.1592 | None |
@@ -88,17 +88,17 @@ Model converged: `TRUE`.
 
 | term | estimate | odds_ratio | odds_ratio_ci_lower | odds_ratio_ci_upper | p_value |
 | --- | --- | --- | --- | --- | --- |
-| (Intercept) | -1.2643 | 0.2824 | 0.2150 | 0.3710 | <1e-6 |
-| age | -0.0232 | 0.9771 | 0.9751 | 0.9790 | <1e-6 |
-| log_revolving_utilization | 0.5515 | 1.7358 | 1.6597 | 1.8153 | <1e-6 |
-| log_debt_ratio | -0.1772 | 0.8376 | 0.7944 | 0.8832 | <1e-6 |
-| log_monthly_income | -0.1301 | 0.8780 | 0.8495 | 0.9075 | <1e-6 |
-| open_credit_lines | 0.0097 | 1.0097 | 1.0039 | 1.0155 | 0.000929 |
-| times_30_59 | 0.5360 | 1.7092 | 1.6695 | 1.7498 | <1e-6 |
-| times_60_89 | 0.7062 | 2.0262 | 1.9281 | 2.1293 | <1e-6 |
-| times_90 | 0.8069 | 2.2410 | 2.1594 | 2.3257 | <1e-6 |
-| real_estate_loans | 0.0944 | 1.0990 | 1.0742 | 1.1243 | <1e-6 |
-| dependents | 0.0597 | 1.0615 | 1.0397 | 1.0837 | <1e-6 |
+| (Intercept) | -2.4529 | 0.0860 | 0.0645 | 0.1147 | <1e-6 |
+| age | -0.0243 | 0.9760 | 0.9741 | 0.9780 | <1e-6 |
+| log_revolving_utilization | 0.5401 | 1.7162 | 1.6412 | 1.7946 | <1e-6 |
+| log_debt_ratio | 0.2195 | 1.2455 | 1.1048 | 1.4042 | 0.000332 |
+| log_monthly_income | 0.0163 | 1.0164 | 0.9835 | 1.0505 | 0.332488 |
+| open_credit_lines | 0.0027 | 1.0027 | 0.9968 | 1.0086 | 0.371671 |
+| times_30_59 | 0.5310 | 1.7007 | 1.6612 | 1.7412 | <1e-6 |
+| times_60_89 | 0.7028 | 2.0194 | 1.9215 | 2.1223 | <1e-6 |
+| times_90 | 0.8111 | 2.2505 | 2.1682 | 2.3359 | <1e-6 |
+| real_estate_loans | 0.0488 | 1.0500 | 1.0243 | 1.0764 | 0.000115 |
+| dependents | 0.0429 | 1.0438 | 1.0225 | 1.0655 | 0.000047 |
 
 ## Generated artifacts
 

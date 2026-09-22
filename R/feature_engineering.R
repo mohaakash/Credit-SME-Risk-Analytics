@@ -47,13 +47,29 @@ build_model_features <- function(cleaned_data) {
     )
   }
 
+  income_is_missing <- is.na(cleaned_data$monthly_income) |
+    (if ("monthly_income_missing" %in% names(cleaned_data)) {
+      as.logical(cleaned_data$monthly_income_missing)
+    } else {
+      FALSE
+    })
+
+  # When monthly income is missing, Kaggle debt_ratio records raw monthly debt in dollars.
+  # For observed income, cap extreme debt_ratio values at 10 to eliminate extreme recording errors.
+  # Missing income sets the DTI ratio to NA so it is cleanly imputed by the training median.
+  dti_observed <- ifelse(
+    income_is_missing,
+    NA_real_,
+    pmin(pmax(cleaned_data$debt_ratio, 0), 10)
+  )
+
   data.frame(
     age = cleaned_data$age,
     log_revolving_utilization = log1p(pmax(
       cleaned_data$revolving_utilization_of_unsecured_lines,
       0
     )),
-    log_debt_ratio = log1p(pmax(cleaned_data$debt_ratio, 0)),
+    log_debt_ratio = log1p(dti_observed),
     log_monthly_income = log1p(pmax(cleaned_data$monthly_income, 0)),
     open_credit_lines = cleaned_data$number_of_open_credit_lines_and_loans,
     times_30_59 = cleaned_data$number_of_time30_59days_past_due_not_worse,
@@ -62,7 +78,7 @@ build_model_features <- function(cleaned_data) {
     real_estate_loans = cleaned_data$number_real_estate_loans_or_lines,
     dependents = cleaned_data$number_of_dependents,
     age_missing = as.integer(is.na(cleaned_data$age)),
-    monthly_income_missing = as.integer(is.na(cleaned_data$monthly_income)),
+    monthly_income_missing = as.integer(income_is_missing),
     dependents_missing = as.integer(is.na(cleaned_data$number_of_dependents)),
     time_30_59_missing = as.integer(is.na(
       cleaned_data$number_of_time30_59days_past_due_not_worse
@@ -72,7 +88,7 @@ build_model_features <- function(cleaned_data) {
     )),
     time_90_missing = as.integer(is.na(cleaned_data$number_of_times90days_late)),
     revolving_utilization_gt_1 = as.integer(cleaned_data$revolving_utilization_gt_1),
-    debt_ratio_gt_10 = as.integer(cleaned_data$debt_ratio_gt_10),
+    debt_ratio_gt_10 = as.integer(!income_is_missing & cleaned_data$debt_ratio > 10),
     check.names = FALSE
   )
 }
@@ -155,6 +171,11 @@ fit_woe_preprocessor <- function(data, target, variables = woe_source_variables(
 
   mappings <- lapply(variables, function(variable) {
     values <- data[[variable]]
+    # Special treatment for debt_ratio: when monthly_income is missing, debt_ratio is dollar debt
+    if (variable == "debt_ratio" && "monthly_income" %in% names(data)) {
+      values[is.na(data$monthly_income)] <- NA_real_
+      values[!is.na(values)] <- pmin(values[!is.na(values)], 10)
+    }
     finite_values <- values[!is.na(values) & is.finite(values)]
     unique_values <- sort(unique(finite_values))
     if (length(unique_values) < 2) {
@@ -206,7 +227,12 @@ apply_woe_preprocessor <- function(data, preprocessor) {
   result <- data.frame(row.names = seq_len(nrow(data)))
   for (variable in preprocessor$variables) {
     mapping <- preprocessor$mappings[[variable]]$mapping
-    bins <- woe_bin_values(data[[variable]], preprocessor$mappings[[variable]]$breaks)
+    values <- data[[variable]]
+    if (variable == "debt_ratio" && "monthly_income" %in% names(data)) {
+      values[is.na(data$monthly_income)] <- NA_real_
+      values[!is.na(values)] <- pmin(values[!is.na(values)], 10)
+    }
+    bins <- woe_bin_values(values, preprocessor$mappings[[variable]]$breaks)
     lookup <- stats::setNames(mapping$woe, mapping$bin)
     values <- unname(lookup[bins])
     values[is.na(values)] <- 0

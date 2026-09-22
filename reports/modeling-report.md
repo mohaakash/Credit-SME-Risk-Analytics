@@ -19,9 +19,9 @@ This is an educational demonstration, not a production lending model or lending-
 - Ratios and monthly income use `log1p` transforms; extreme observations are not silently removed.
 - No test labels or post-target fields are used as predictors.
 
-## Class imbalance
+## Class imbalance and probability calibration
 
-The target is imbalanced, so the Random Forest uses equal per-class bootstrap sample sizes and XGBoost uses the training-set negative-to-positive ratio as `scale_pos_weight`. Metrics remain reported on the untouched stratified test set.
+The target is imbalanced. Random Forest uses balanced per-class bootstrap sampling and is calibrated using Platt scaling on out-of-bag training predictions. XGBoost is trained with scale_pos_weight = 13.96 and its probabilities are calibrated back to true population prevalence via Bayesian prior odds adjustment. Held-out test evaluation reflects true calibrated posterior probabilities.
 
 | split | class | borrower_count | class_rate | majority_to_minority_ratio |
 | --- | --- | --- | --- | --- |
@@ -42,7 +42,7 @@ WoE bins and Information Value are fit on the training partition only, with miss
 | number_of_time60_89days_past_due_not_worse | 0.5713 | 3 |
 | age | 0.2559 | 6 |
 | monthly_income | 0.0687 | 6 |
-| debt_ratio | 0.0567 | 5 |
+| debt_ratio | 0.0593 | 6 |
 | number_real_estate_loans_or_lines | 0.0563 | 4 |
 | number_of_open_credit_lines_and_loans | 0.0496 | 5 |
 | number_of_dependents | 0.0373 | 5 |
@@ -60,17 +60,17 @@ WoE bins and Information Value are fit on the training partition only, with miss
 
 | model | borrower_count | default_rate | roc_auc | pr_auc | ks | ks_threshold | brier_score |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Logistic | 30001 | 6.69% | 0.8295 | 0.3584 | 0.5128 | 0.0611 | 0.0528 |
-| Logistic_WOE | 30001 | 6.69% | 0.8521 | 0.3589 | 0.5546 | 0.0615 | 0.0513 |
-| CART | 30001 | 6.69% | 0.7835 | 0.3377 | 0.4908 | 0.0799 | 0.0514 |
-| RandomForest | 30001 | 6.69% | 0.8599 | 0.3538 | 0.5752 | 0.4433 | 0.1434 |
-| XGBoost | 30001 | 6.69% | 0.8645 | 0.3930 | 0.5810 | 0.4714 | 0.1423 |
+| Logistic | 30001 | 6.69% | 0.8332 | 0.3601 | 0.5214 | 0.0599 | 0.0526 |
+| Logistic_WOE | 30001 | 6.69% | 0.8521 | 0.3589 | 0.5531 | 0.0672 | 0.0513 |
+| CART | 30001 | 6.69% | 0.7835 | 0.3372 | 0.4908 | 0.0799 | 0.0514 |
+| RandomForest | 30001 | 6.69% | 0.8600 | 0.3580 | 0.5774 | 0.0753 | 0.0513 |
+| XGBoost | 30001 | 6.69% | 0.8646 | 0.3935 | 0.5788 | 0.0630 | 0.0493 |
 
 ROC-AUC measures ranking discrimination; PR-AUC is useful under class imbalance; KS is the maximum separation between cumulative default and non-default distributions; Brier score measures probability error, where lower is better.
 
 ## Benchmark interpretation
 
-Random Forest has the strongest ROC-AUC (0.8599) and KS (0.5752), but its class-balanced training changes the score scale and produces poor probability calibration on the held-out test set (Brier score 0.1434). XGBoost reaches ROC-AUC 0.8645 with Brier score 0.1423. The WoE logistic candidate reaches ROC-AUC 0.8521 and Brier score 0.0513 versus 0.0528 for the raw-feature logistic baseline. The WoE logistic candidate is the strongest interpretable demonstration candidate, while raw logistic remains the unbinned baseline. None of the tree ensembles should be used for policy decisions without calibration, validation, and governance.
+With Bayesian prior odds calibration on XGBoost and out-of-bag Platt scaling on Random Forest, both non-linear benchmarks achieve well-calibrated posterior probabilities aligning with the 6.69% held-out test default rate. XGBoost achieves the strongest overall ranking discrimination (ROC-AUC 0.8646, KS 0.5788) and the lowest probability error across all models (Brier score 0.0493). Calibrated Random Forest achieves ROC-AUC 0.8600 with Brier score 0.0513. The WoE logistic candidate achieves ROC-AUC 0.8521 and Brier score 0.0513 versus 0.0526 for the unbinned logistic baseline. The WoE logistic model remains the preferred interpretable champion for scorecard policy governance, while calibrated XGBoost serves as a high-performance challenger benchmark.
 
 ## Demonstration threshold trade-offs
 
@@ -78,26 +78,26 @@ These thresholds are displayed to make false-positive and false-negative trade-o
 
 | model | threshold | sensitivity | specificity | precision | false_positive_rate | false_negative_rate | flagged_rate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Logistic | 3.00% | 94.22% | 34.26% | 9.31% | 65.74% | 5.78% | 67.64% |
-| Logistic | 5.00% | 78.91% | 69.52% | 15.65% | 30.48% | 21.09% | 33.72% |
-| Logistic | 10.00% | 52.34% | 92.47% | 33.26% | 7.53% | 47.66% | 10.52% |
-| Logistic | 20.00% | 34.70% | 97.00% | 45.34% | 3.00% | 65.30% | 5.12% |
-| Logistic_WOE | 3.00% | 90.28% | 57.55% | 13.22% | 42.45% | 9.72% | 45.65% |
-| Logistic_WOE | 5.00% | 82.20% | 72.25% | 17.51% | 27.75% | 17.80% | 31.39% |
-| Logistic_WOE | 10.00% | 64.16% | 87.72% | 27.24% | 12.28% | 35.84% | 15.75% |
-| Logistic_WOE | 20.00% | 45.56% | 95.15% | 40.23% | 4.85% | 54.44% | 7.57% |
+| Logistic | 3.00% | 94.27% | 35.46% | 9.47% | 64.54% | 5.73% | 66.52% |
+| Logistic | 5.00% | 80.36% | 69.69% | 15.97% | 30.31% | 19.64% | 33.65% |
+| Logistic | 10.00% | 52.59% | 92.37% | 33.06% | 7.63% | 47.41% | 10.64% |
+| Logistic | 20.00% | 35.00% | 96.96% | 45.17% | 3.04% | 65.00% | 5.18% |
+| Logistic_WOE | 3.00% | 90.08% | 57.55% | 13.20% | 42.45% | 9.92% | 45.63% |
+| Logistic_WOE | 5.00% | 81.75% | 72.70% | 17.67% | 27.30% | 18.25% | 30.94% |
+| Logistic_WOE | 10.00% | 63.76% | 88.19% | 27.89% | 11.81% | 36.24% | 15.29% |
+| Logistic_WOE | 20.00% | 44.52% | 95.15% | 39.69% | 4.85% | 55.48% | 7.50% |
 | CART | 3.00% | 70.74% | 78.31% | 18.94% | 21.69% | 29.26% | 24.97% |
 | CART | 5.00% | 70.74% | 78.31% | 18.94% | 21.69% | 29.26% | 24.97% |
 | CART | 10.00% | 55.28% | 91.81% | 32.61% | 8.19% | 44.72% | 11.34% |
 | CART | 20.00% | 55.28% | 91.81% | 32.61% | 8.19% | 44.72% | 11.34% |
-| RandomForest | 3.00% | 96.96% | 30.90% | 9.14% | 69.10% | 3.04% | 70.96% |
-| RandomForest | 5.00% | 95.26% | 41.19% | 10.40% | 58.81% | 4.74% | 61.25% |
-| RandomForest | 10.00% | 92.12% | 53.73% | 12.48% | 46.27% | 7.88% | 49.34% |
-| RandomForest | 20.00% | 88.09% | 63.89% | 14.88% | 36.11% | 11.91% | 39.58% |
-| XGBoost | 3.00% | 100.00% | 0.27% | 6.70% | 99.73% | 0.00% | 99.75% |
-| XGBoost | 5.00% | 99.75% | 4.49% | 6.96% | 95.51% | 0.25% | 95.79% |
-| XGBoost | 10.00% | 98.21% | 22.42% | 8.32% | 77.58% | 1.79% | 78.96% |
-| XGBoost | 20.00% | 93.57% | 49.67% | 11.75% | 50.33% | 6.43% | 53.22% |
+| RandomForest | 3.00% | 91.67% | 55.65% | 12.90% | 44.35% | 8.33% | 47.52% |
+| RandomForest | 5.00% | 86.39% | 68.56% | 16.45% | 31.44% | 13.61% | 35.11% |
+| RandomForest | 10.00% | 70.34% | 84.87% | 24.98% | 15.13% | 29.66% | 18.83% |
+| RandomForest | 20.00% | 46.01% | 95.00% | 39.75% | 5.00% | 53.99% | 7.74% |
+| XGBoost | 3.00% | 89.43% | 63.01% | 14.77% | 36.99% | 10.57% | 40.50% |
+| XGBoost | 5.00% | 82.85% | 73.77% | 18.46% | 26.23% | 17.15% | 30.02% |
+| XGBoost | 10.00% | 67.70% | 86.84% | 26.93% | 13.16% | 32.30% | 16.81% |
+| XGBoost | 20.00% | 51.05% | 94.42% | 39.60% | 5.58% | 48.95% | 8.62% |
 
 ## Calibration and lift
 
@@ -105,21 +105,21 @@ Risk decile 1 contains the highest predicted-risk observations. The full calibra
 
 | model | decile | borrower_count | predicted_default_rate | observed_default_rate |
 | --- | --- | --- | --- | --- |
-| Logistic |  1 | 3000 | 30.46% | 34.27% |
-| Logistic |  5 | 3000 | 4.23% | 3.90% |
-| Logistic | 10 | 3001 | 1.60% | 0.80% |
-| Logistic_WOE |  1 | 3000 | 34.76% | 35.43% |
-| Logistic_WOE |  5 | 3000 | 3.06% | 3.40% |
+| Logistic |  1 | 3000 | 30.60% | 34.03% |
+| Logistic |  5 | 3000 | 4.18% | 3.43% |
+| Logistic | 10 | 3001 | 1.51% | 0.77% |
+| Logistic_WOE |  1 | 3000 | 34.74% | 35.40% |
+| Logistic_WOE |  5 | 3000 | 3.07% | 3.10% |
 | Logistic_WOE | 10 | 3001 | 0.93% | 0.67% |
 | CART |  1 | 3000 | 34.58% | 33.93% |
 | CART |  5 | 3000 | 2.53% | 2.57% |
 | CART | 10 | 3001 | 2.53% | 2.47% |
-| RandomForest |  1 | 3000 | 93.79% | 36.07% |
-| RandomForest |  5 | 3000 | 13.64% | 2.70% |
-| RandomForest | 10 | 3001 | 0.26% | 0.30% |
-| XGBoost |  1 | 3000 | 86.44% | 36.70% |
-| XGBoost |  5 | 3000 | 26.11% | 2.17% |
-| XGBoost | 10 | 3001 | 5.15% | 0.37% |
+| RandomForest |  1 | 3000 | 30.62% | 35.50% |
+| RandomForest |  5 | 3000 | 3.36% | 2.50% |
+| RandomForest | 10 | 3001 | 0.26% | 0.37% |
+| XGBoost |  1 | 3000 | 35.81% | 36.63% |
+| XGBoost |  5 | 3000 | 2.48% | 2.27% |
+| XGBoost | 10 | 3001 | 0.39% | 0.33% |
 
 ## Feature interpretation
 
@@ -128,35 +128,35 @@ Logistic odds ratios are conditional associations for the transformed feature te
 | model | feature | importance | odds_ratio | p_value |
 | --- | --- | --- | --- | --- |
 | CART | times_90 | 1,813.4432 | NA | NA |
-| CART | log_revolving_utilization | 509.2881 | NA | NA |
+| CART | log_revolving_utilization | 509.2882 | NA | NA |
 | CART | times_60_89 | 276.1363 | NA | NA |
-| CART | times_30_59 | 120.8582 | NA | NA |
+| CART | times_30_59 | 117.6399 | NA | NA |
 | CART | time_30_59_missing | 88.4459 | NA | NA |
 | CART | time_60_89_missing | 88.4459 | NA | NA |
-| Logistic | age_missing | 7.0612 | 0.0009 | 0.922372 |
-| Logistic | time_30_59_missing | 2.7805 | 16.1272 | <1e-6 |
-| Logistic | revolving_utilization_gt_1 | 0.8592 | 2.3613 | <1e-6 |
-| Logistic | times_90 | 0.8077 | 2.2427 | <1e-6 |
-| Logistic | times_60_89 | 0.6868 | 1.9873 | <1e-6 |
-| Logistic | times_30_59 | 0.5317 | 1.7019 | <1e-6 |
-| Logistic_WOE | woe_debt_ratio | 0.8286 | 0.4367 | <1e-6 |
-| Logistic_WOE | woe_revolving_utilization_of_unsecured_lines | 0.6264 | 0.5345 | <1e-6 |
-| Logistic_WOE | woe_number_real_estate_loans_or_lines | 0.6065 | 0.5453 | <1e-6 |
-| Logistic_WOE | woe_number_of_times90days_late | 0.5572 | 0.5728 | <1e-6 |
-| Logistic_WOE | woe_number_of_time30_59days_past_due_not_worse | 0.5035 | 0.6044 | <1e-6 |
-| Logistic_WOE | woe_age | 0.4223 | 0.6556 | <1e-6 |
-| RandomForest | log_revolving_utilization | 1,326.2199 | NA | NA |
-| RandomForest | times_90 | 628.1223 | NA | NA |
-| RandomForest | times_30_59 | 621.3745 | NA | NA |
-| RandomForest | times_60_89 | 330.2366 | NA | NA |
-| RandomForest | age | 299.3852 | NA | NA |
-| RandomForest | log_debt_ratio | 268.8079 | NA | NA |
-| XGBoost | log_revolving_utilization | 0.4428 | NA | NA |
-| XGBoost | times_90 | 0.1668 | NA | NA |
-| XGBoost | times_30_59 | 0.1501 | NA | NA |
-| XGBoost | times_60_89 | 0.0699 | NA | NA |
-| XGBoost | age | 0.0477 | NA | NA |
-| XGBoost | open_credit_lines | 0.0312 | NA | NA |
+| Logistic | age_missing | 7.0712 | 0.0008 | 0.922262 |
+| Logistic | time_30_59_missing | 2.9390 | 18.8960 | <1e-6 |
+| Logistic | debt_ratio_gt_10 | 2.3735 | 0.0932 | <1e-6 |
+| Logistic | revolving_utilization_gt_1 | 0.8544 | 2.3499 | <1e-6 |
+| Logistic | times_90 | 0.8078 | 2.2430 | <1e-6 |
+| Logistic | times_60_89 | 0.6769 | 1.9678 | <1e-6 |
+| Logistic_WOE | woe_debt_ratio | 0.8415 | 0.4310 | <1e-6 |
+| Logistic_WOE | woe_revolving_utilization_of_unsecured_lines | 0.6269 | 0.5342 | <1e-6 |
+| Logistic_WOE | woe_number_real_estate_loans_or_lines | 0.6048 | 0.5462 | <1e-6 |
+| Logistic_WOE | woe_number_of_times90days_late | 0.5591 | 0.5717 | <1e-6 |
+| Logistic_WOE | woe_number_of_time30_59days_past_due_not_worse | 0.5017 | 0.6055 | <1e-6 |
+| Logistic_WOE | woe_age | 0.4215 | 0.6560 | <1e-6 |
+| RandomForest | log_revolving_utilization | 1,302.0731 | NA | NA |
+| RandomForest | times_90 | 654.7522 | NA | NA |
+| RandomForest | times_30_59 | 600.0199 | NA | NA |
+| RandomForest | times_60_89 | 324.8108 | NA | NA |
+| RandomForest | age | 304.2266 | NA | NA |
+| RandomForest | log_debt_ratio | 256.2431 | NA | NA |
+| XGBoost | log_revolving_utilization | 0.4423 | NA | NA |
+| XGBoost | times_90 | 0.1674 | NA | NA |
+| XGBoost | times_30_59 | 0.1507 | NA | NA |
+| XGBoost | times_60_89 | 0.0696 | NA | NA |
+| XGBoost | age | 0.0455 | NA | NA |
+| XGBoost | log_debt_ratio | 0.0362 | NA | NA |
 
 ## Segment stability and fairness proxy review
 
@@ -164,62 +164,62 @@ Held-out performance is summarized across age, income-availability, and 90+ day-
 
 | model | segment | band | borrower_count | default_count | default_rate | roc_auc | brier_score |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Logistic | age_band | <30 |  1737 |  214 | 12.32% | 0.808 | 0.092 |
-| Logistic | age_band | 30-44 |  7862 |  733 | 9.32% | 0.810 | 0.072 |
-| Logistic | age_band | 45-59 | 10790 |  752 | 6.97% | 0.832 | 0.055 |
-| Logistic | age_band | 60+ |  9612 |  307 | 3.19% | 0.820 | 0.028 |
-| Logistic_WOE | age_band | <30 |  1737 |  214 | 12.32% | 0.803 | 0.096 |
+| Logistic | age_band | <30 |  1737 |  214 | 12.32% | 0.807 | 0.092 |
+| Logistic | age_band | 30-44 |  7862 |  733 | 9.32% | 0.812 | 0.071 |
+| Logistic | age_band | 45-59 | 10790 |  752 | 6.97% | 0.836 | 0.055 |
+| Logistic | age_band | 60+ |  9612 |  307 | 3.19% | 0.824 | 0.028 |
+| Logistic_WOE | age_band | <30 |  1737 |  214 | 12.32% | 0.802 | 0.096 |
 | Logistic_WOE | age_band | 30-44 |  7862 |  733 | 9.32% | 0.831 | 0.069 |
 | Logistic_WOE | age_band | 45-59 | 10790 |  752 | 6.97% | 0.856 | 0.053 |
-| Logistic_WOE | age_band | 60+ |  9612 |  307 | 3.19% | 0.827 | 0.027 |
+| Logistic_WOE | age_band | 60+ |  9612 |  307 | 3.19% | 0.828 | 0.027 |
 | CART | age_band | <30 |  1737 |  214 | 12.32% | 0.776 | 0.089 |
 | CART | age_band | 30-44 |  7862 |  733 | 9.32% | 0.778 | 0.070 |
 | CART | age_band | 45-59 | 10790 |  752 | 6.97% | 0.788 | 0.053 |
 | CART | age_band | 60+ |  9612 |  307 | 3.19% | 0.720 | 0.028 |
-| RandomForest | age_band | <30 |  1737 |  214 | 12.32% | 0.799 | 0.266 |
-| RandomForest | age_band | 30-44 |  7862 |  733 | 9.32% | 0.840 | 0.198 |
-| RandomForest | age_band | 45-59 | 10790 |  752 | 6.97% | 0.860 | 0.151 |
-| RandomForest | age_band | 60+ |  9612 |  307 | 3.19% | 0.851 | 0.068 |
-| XGBoost | age_band | <30 |  1737 |  214 | 12.32% | 0.818 | 0.238 |
-| XGBoost | age_band | 30-44 |  7862 |  733 | 9.32% | 0.845 | 0.195 |
-| XGBoost | age_band | 45-59 | 10790 |  752 | 6.97% | 0.864 | 0.152 |
-| XGBoost | age_band | 60+ |  9612 |  307 | 3.19% | 0.856 | 0.071 |
-| Logistic | income_status | Missing |  6050 |  335 | 5.54% | 0.866 | 0.043 |
-| Logistic | income_status | Observed | 23951 | 1671 | 6.98% | 0.819 | 0.055 |
-| Logistic_WOE | income_status | Missing |  6050 |  335 | 5.54% | 0.891 | 0.042 |
+| RandomForest | age_band | <30 |  1737 |  214 | 12.32% | 0.800 | 0.094 |
+| RandomForest | age_band | 30-44 |  7862 |  733 | 9.32% | 0.840 | 0.069 |
+| RandomForest | age_band | 45-59 | 10790 |  752 | 6.97% | 0.862 | 0.053 |
+| RandomForest | age_band | 60+ |  9612 |  307 | 3.19% | 0.846 | 0.027 |
+| XGBoost | age_band | <30 |  1737 |  214 | 12.32% | 0.817 | 0.088 |
+| XGBoost | age_band | 30-44 |  7862 |  733 | 9.32% | 0.845 | 0.066 |
+| XGBoost | age_band | 45-59 | 10790 |  752 | 6.97% | 0.865 | 0.051 |
+| XGBoost | age_band | 60+ |  9612 |  307 | 3.19% | 0.854 | 0.026 |
+| Logistic | income_status | Missing |  6050 |  335 | 5.54% | 0.869 | 0.043 |
+| Logistic | income_status | Observed | 23951 | 1671 | 6.98% | 0.823 | 0.055 |
+| Logistic_WOE | income_status | Missing |  6050 |  335 | 5.54% | 0.892 | 0.041 |
 | Logistic_WOE | income_status | Observed | 23951 | 1671 | 6.98% | 0.841 | 0.054 |
 | CART | income_status | Missing |  6050 |  335 | 5.54% | 0.840 | 0.040 |
 | CART | income_status | Observed | 23951 | 1671 | 6.98% | 0.771 | 0.054 |
-| RandomForest | income_status | Missing |  6050 |  335 | 5.54% | 0.895 | 0.115 |
-| RandomForest | income_status | Observed | 23951 | 1671 | 6.98% | 0.850 | 0.150 |
-| XGBoost | income_status | Missing |  6050 |  335 | 5.54% | 0.899 | 0.107 |
-| XGBoost | income_status | Observed | 23951 | 1671 | 6.98% | 0.854 | 0.151 |
-| Logistic | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.237 | 0.289 |
-| Logistic | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.778 | 0.042 |
-| Logistic | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.706 | 0.229 |
-| Logistic_WOE | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.442 | 0.340 |
+| RandomForest | income_status | Missing |  6050 |  335 | 5.54% | 0.893 | 0.042 |
+| RandomForest | income_status | Observed | 23951 | 1671 | 6.98% | 0.850 | 0.054 |
+| XGBoost | income_status | Missing |  6050 |  335 | 5.54% | 0.897 | 0.039 |
+| XGBoost | income_status | Observed | 23951 | 1671 | 6.98% | 0.855 | 0.052 |
+| Logistic | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.311 | 0.277 |
+| Logistic | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.784 | 0.042 |
+| Logistic | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.709 | 0.228 |
+| Logistic_WOE | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.496 | 0.337 |
 | Logistic_WOE | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.812 | 0.041 |
-| Logistic_WOE | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.666 | 0.225 |
+| Logistic_WOE | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.665 | 0.225 |
 | CART | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.640 | 0.227 |
 | CART | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.706 | 0.042 |
-| CART | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.679 | 0.216 |
-| RandomForest | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.506 | 0.382 |
-| RandomForest | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.825 | 0.121 |
-| RandomForest | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.648 | 0.522 |
-| XGBoost | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.709 | 0.316 |
-| XGBoost | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.829 | 0.125 |
-| XGBoost | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.699 | 0.448 |
+| CART | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.678 | 0.216 |
+| RandomForest | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.604 | 0.279 |
+| RandomForest | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.825 | 0.040 |
+| RandomForest | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.654 | 0.235 |
+| XGBoost | delinquency_90_status | Missing |    58 |   35 | 60.34% | 0.598 | 0.250 |
+| XGBoost | delinquency_90_status | No 90+ day events | 28330 | 1342 | 4.74% | 0.830 | 0.040 |
+| XGBoost | delinquency_90_status | One or more 90+ day events |  1613 |  629 | 39.00% | 0.703 | 0.209 |
 
 The fairness proxy table reports logistic-model true- and false-positive rates at the 0.10 demonstration threshold for available age and income-availability segments. The dataset contains no protected-attribute fields, so this is not a fairness assessment; a production review would require legally and ethically appropriate protected-group data and governance.
 
 | segment | band | borrower_count | default_rate | mean_predicted_risk | threshold | true_positive_rate | false_positive_rate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| age_band | <30 |  1737 | 12.32% | 12.52% | 10.00% | 71.50% | 21.21% |
-| age_band | 30-44 |  7862 | 9.32% | 9.43% | 10.00% | 60.03% | 12.64% |
-| age_band | 45-59 | 10790 | 6.97% | 6.70% | 10.00% | 49.07% | 6.97% |
-| age_band | 60+ |  9612 | 3.19% | 3.24% | 10.00% | 28.66% | 1.97% |
-| income_status | Missing |  6050 | 5.54% | 5.59% | 10.00% | 56.42% | 5.14% |
-| income_status | Observed | 23951 | 6.98% | 6.91% | 10.00% | 51.53% | 8.14% |
+| age_band | <30 |  1737 | 12.32% | 12.35% | 10.00% | 70.56% | 21.34% |
+| age_band | 30-44 |  7862 | 9.32% | 9.45% | 10.00% | 60.16% | 13.00% |
+| age_band | 45-59 | 10790 | 6.97% | 6.69% | 10.00% | 49.20% | 7.01% |
+| age_band | 60+ |  9612 | 3.19% | 3.23% | 10.00% | 30.29% | 1.93% |
+| income_status | Missing |  6050 | 5.54% | 5.59% | 10.00% | 56.42% | 4.93% |
+| income_status | Observed | 23951 | 6.98% | 6.90% | 10.00% | 51.83% | 8.32% |
 
 ## Generated artifacts
 
