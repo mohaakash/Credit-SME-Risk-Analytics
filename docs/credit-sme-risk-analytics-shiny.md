@@ -1,8 +1,8 @@
-# Credit-SME Risk Analytics and Monitoring Dashboard
+# Consumer Credit Risk Analytics and Monitoring Dashboard
 
 ## Project objective
 
-Build an R and Shiny application for analyzing loan applications, monitoring loan portfolio performance, and developing an interpretable credit-risk model.
+Build an R and Shiny application for analyzing credit applications, monitoring portfolio performance, and developing an interpretable credit-risk model.
 
 The project is designed to demonstrate capability in:
 

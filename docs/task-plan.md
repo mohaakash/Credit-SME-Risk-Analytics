@@ -1,4 +1,4 @@
-# Credit-SME Risk Analytics Dashboard — Task Plan
+# Consumer Credit Risk Analytics Dashboard — Task Plan
 
 ## Current status
 

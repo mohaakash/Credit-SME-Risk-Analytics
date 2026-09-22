@@ -1,6 +1,6 @@
-# Credit-SME Risk Analytics and Monitoring Dashboard
+# Consumer Credit Risk Analytics and Monitoring Dashboard
 
-An R and Shiny project for exploring credit-risk patterns, comparing default-risk models, and presenting portfolio-monitoring insights through an interactive dashboard.
+An R and Shiny decision-support project for analyzing consumer credit-risk patterns, building and comparing default-risk models, and presenting portfolio-monitoring insights through an interactive dashboard.
 
 ## Dashboard preview
 
@@ -8,9 +8,9 @@ An R and Shiny project for exploring credit-risk patterns, comparing default-ris
 
 ## Dataset
 
-This project uses the [Give Me Some Credit dataset on Kaggle](https://www.kaggle.com/datasets/lihxlhx/give-me-some-credit), based on the original [Give Me Some Credit competition](https://www.kaggle.com/c/GiveMeSomeCredit/data).
+This project uses the benchmark [Give Me Some Credit dataset on Kaggle](https://www.kaggle.com/datasets/lihxlhx/give-me-some-credit), based on the original [Give Me Some Credit competition](https://www.kaggle.com/c/GiveMeSomeCredit/data).
 
-The dataset contains borrower-level credit information and the target `SeriousDlqin2yrs`, which indicates serious financial distress within two years. It does not contain a complete SME application funnel, application dates, processing stages, industry, geography, or loan amount fields.
+The dataset contains consumer-level credit card and personal revolving line information with the target `SeriousDlqin2yrs` (indicating serious 90+ days past due delinquency or financial distress within two years). It reflects retail consumer credit scoring rather than commercial enterprise lending.
 
 The downloaded files are stored in `data/raw/` and intentionally ignored by Git. Do not commit confidential, restricted, or personally identifiable financial data.
 
